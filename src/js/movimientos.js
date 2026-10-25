@@ -2,7 +2,7 @@ import { state, $, fmt, esc, ic, today, monthName, month, save, catColor, setMon
 import { filterTx, groupByDay, netOf, round2 } from './logic/calculos.js';
 import { addMonths } from './logic/fechas.js';
 import { parseTags } from './logic/analisis.js';
-import { toast, fillCatSelect, fillAccSelect, undoable } from './ui.js';
+import { toast, fillCatSelect, fillAccSelect, undoable, action } from './ui.js';
 import { render } from './render.js';
 
 // ===== Movimientos: lista, filtros y modal =====
@@ -35,7 +35,7 @@ export function renderTx() {
   $('txSum').innerHTML = list.length ? `${list.length} · neto <b class="num ${net >= 0 ? 'pos' : 'neg'}">${fmt(net)}</b>` : '';
   if (!list.length) {
     $('txList').innerHTML =
-      `<div class="empty">${ic('list')}No hay movimientos con estos filtros.<button class="btn" onclick="openTx()">${ic('plus')}Registrar uno</button></div>`;
+      `<div class="empty">${ic('list')}No hay movimientos con estos filtros.<button class="btn" data-action="newTx">${ic('plus')}Registrar uno</button></div>`;
     return;
   }
   $('txList').innerHTML = groupByDay(list)
@@ -54,7 +54,7 @@ const small = name => ic(name).replace('class="ic"', 'class="ic" style="width:11
 function txRow(x) {
   const isT = x.type === 'transferencia',
     col = isT ? 'var(--accent)' : catColor(x.cat);
-  const tags = (x.tags || []).map(t => `<button class="tagchip" onclick="filterTag('${esc(t)}')">#${esc(t)}</button>`).join('');
+  const tags = (x.tags || []).map(t => `<button class="tagchip" data-action="filterTag" data-tag="${esc(t)}">#${esc(t)}</button>`).join('');
   const meta = isT
     ? `<span class="tag">${small('swap')}${esc(accName(x.account))} → ${esc(accName(x.to))}</span>`
     : `<span class="tag"><i class="swatch" style="background:${col}"></i>${esc(x.cat)}${x.sub ? ' › ' + esc(x.sub) : ''}</span>${esc(accName(x.account))}`;
@@ -62,14 +62,14 @@ function txRow(x) {
     <div class="avatar" style="background:color-mix(in srgb,${col} 16%,transparent);color:${col}">${isT ? ic('swap') : esc(x.cat.charAt(0))}</div>
     <div class="meta"><b>${esc(x.desc)}</b><span>${meta}${x.recId ? ` <span class="tag">${small('repeat')}recurrente</span>` : ''}${tags}${x.note && x.note !== 'Recurrente' ? ' · ' + esc(x.note) : ''}</span></div>
     <div class="amt ${isT ? '' : x.type === 'ingreso' ? 'pos' : 'neg'}">${isT ? '' : x.type === 'ingreso' ? '+' : '−'}${fmt(x.amount)}</div>
-    <div class="acts"><button class="iconbtn" onclick="openTx(${x.id})" aria-label="Editar">${ic('edit')}</button><button class="iconbtn del" onclick="delTx(${x.id})" aria-label="Eliminar">${ic('trash')}</button></div>
+    <div class="acts"><button class="iconbtn" data-action="editTx" data-id="${x.id}" aria-label="Editar">${ic('edit')}</button><button class="iconbtn del" data-action="delTx" data-id="${x.id}" aria-label="Eliminar">${ic('trash')}</button></div>
   </div>`;
 }
 
-window.filterTag = t => {
-  $('fSearch').value = '#' + t;
+action('filterTag', ({ tag }) => {
+  $('fSearch').value = '#' + tag;
   renderTx();
-};
+});
 
 // ----- Modal -----
 export const curType = () => document.querySelector('input[name=type]:checked').value;
@@ -89,8 +89,8 @@ function syncSubs() {
   $('txSubList').innerHTML = (state.subcats[$('txCat').value] || []).map(s => `<option value="${esc(s)}">`).join('');
 }
 
-// 'preset' permite abrir el modal con valores, p. ej. una transferencia hacia una tarjeta
-window.openTx = (id, preset = {}) => {
+// 'preset' permite abrir el modal con valores, p. ej. una transferencia hacia una tarjeta (ver cuentas.js)
+export function openTx(id, preset = {}) {
   const x = id ? state.tx.find(t => t.id === id) : null,
     v = x || preset;
   $('txForm').reset();
@@ -117,7 +117,9 @@ window.openTx = (id, preset = {}) => {
   $('btnSave').textContent = x ? 'Guardar cambios' : 'Agregar';
   $('txModal').hidden = false;
   $('txAmount').focus();
-};
+}
+action('newTx', () => openTx());
+action('editTx', ({ id }) => openTx(Number(id)));
 export const closeTx = () => ($('txModal').hidden = true);
 document.querySelectorAll('input[name=type]').forEach(r => (r.onchange = syncType));
 $('txCat').addEventListener('change', syncSubs);
@@ -184,12 +186,14 @@ $('txForm').addEventListener('submit', e => {
       : `${{ gasto: 'Gasto', ingreso: 'Ingreso', transferencia: 'Transferencia' }[type]} de ${fmt(tx.amount)} registrado`
   );
 });
-window.delTx = id => {
+action('delTx', ({ id }) => {
+  id = Number(id);
   const x = state.tx.find(t => t.id === id);
+  if (!x) return;
   undoable(`"${x.desc}" eliminado`, 'trash', () => {
     state.tx = state.tx.filter(t => t.id !== id);
   });
-};
+});
 
 // ===== Periodo y filtros =====
 $('mPrev').onclick = () => {

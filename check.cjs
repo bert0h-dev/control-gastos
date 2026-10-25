@@ -164,6 +164,27 @@ function sample() {
       errors.push(`[${name}] tras recargar, el movimiento no está`);
     if (!(await page.textContent('#syncTitle')).includes('Guardado')) errors.push(`[${name}] el indicador no muestra conexión con la base`);
     runs++;
+    // Seguridad: un nombre con comillas y paréntesis no debe romper ni ejecutar nada (antes iba dentro de onclick)
+    try {
+      const evil = `Rara "x" ')alert(1)//`;
+      let dialog = false;
+      page.once('dialog', d => ((dialog = true), d.dismiss()));
+      await page.click('.tab[data-tab="ajustes"]');
+      await page.fill('#catName', evil);
+      await page.click('#catForm button[type="submit"]');
+      const chip = page.locator('#catListG .chip', { hasText: 'Rara' });
+      if ((await chip.count()) !== 1) errors.push(`[${name}] no se creó la categoría con comillas`);
+      await chip.locator('[data-action="delCat"]').click();
+      if (await page.locator('#catListG .chip', { hasText: 'Rara' }).count())
+        errors.push(`[${name}] no se pudo borrar la categoría con comillas`);
+      await page.click('.toast-btn');
+      if ((await page.locator('#catListG .chip', { hasText: 'Rara' }).count()) !== 1)
+        errors.push(`[${name}] deshacer no restauró la categoría`);
+      if (dialog) errors.push(`[${name}] el nombre de la categoría ejecutó código`);
+      await page.locator('#catListG .chip', { hasText: 'Rara' }).locator('[data-action="delCat"]').click();
+    } catch (e) {
+      errors.push(`[${name}] falló la prueba de categoría con comillas: ${e.message.split('\n')[0]}`);
+    }
     // Flujo: cambiar paleta y modo desde Ajustes; captura de cada paleta (solo en escritorio claro)
     try {
       await page.click('.tab[data-tab="ajustes"]');

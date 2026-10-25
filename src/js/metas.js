@@ -1,6 +1,6 @@
 import { state, $, fmt, esc, ic, today, monthName, save, newId } from './core.js';
 import { goalPlan, round2 } from './logic/calculos.js';
-import { toast, ask, undoable } from './ui.js';
+import { toast, ask, undoable, action } from './ui.js';
 import { render } from './render.js';
 
 // ===== Metas =====
@@ -28,10 +28,10 @@ export function renderGoals() {
       <div class="amt"><b>${fmt(g.saved)}</b> <span style="color:var(--muted)">de ${fmt(g.target)}</span></div>
       <div class="info">${info}</div>
       <div class="btns">
-        <button class="btn" onclick="moveGoal(${g.id},1)">${ic('plus')}Abonar</button>
-        <button class="btn sec" onclick="moveGoal(${g.id},-1)" ${g.saved ? '' : 'disabled'}>Retirar</button>
-        <button class="iconbtn" onclick="editGoal(${g.id})" aria-label="Editar meta">${ic('edit')}</button>
-        <button class="iconbtn del" onclick="delGoal(${g.id})" aria-label="Eliminar meta">${ic('trash')}</button>
+        <button class="btn" data-action="moveGoal" data-id="${g.id}" data-sign="1">${ic('plus')}Abonar</button>
+        <button class="btn sec" data-action="moveGoal" data-id="${g.id}" data-sign="-1" ${g.saved ? '' : 'disabled'}>Retirar</button>
+        <button class="iconbtn" data-action="editGoal" data-id="${g.id}" aria-label="Editar meta">${ic('edit')}</button>
+        <button class="iconbtn del" data-action="delGoal" data-id="${g.id}" aria-label="Eliminar meta">${ic('trash')}</button>
       </div>
     </div>`;
         })
@@ -48,8 +48,9 @@ function resetGoalForm() {
   $('gCancel').hidden = true;
 }
 $('gCancel').onclick = resetGoalForm;
-window.editGoal = id => {
-  const g = state.goals.find(x => x.id === id);
+action('editGoal', ({ id }) => {
+  const g = state.goals.find(x => x.id === Number(id));
+  if (!g) return;
   $('gId').value = g.id;
   $('gName').value = g.name;
   $('gTarget').value = g.target;
@@ -59,7 +60,7 @@ window.editGoal = id => {
   $('gCancel').hidden = false;
   $('goalForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
   $('gName').focus();
-};
+});
 $('goalForm').addEventListener('submit', e => {
   e.preventDefault();
   const fields = { name: $('gName').value.trim(), target: round2(parseFloat($('gTarget').value)), deadline: $('gDeadline').value };
@@ -75,8 +76,10 @@ $('goalForm').addEventListener('submit', e => {
   render();
   toast(id ? 'Meta actualizada' : 'Meta creada', 'target');
 });
-window.moveGoal = async (id, sign) => {
-  const g = state.goals.find(x => x.id === id);
+action('moveGoal', async ({ id, sign }) => {
+  sign = Number(sign);
+  const g = state.goals.find(x => x.id === Number(id));
+  if (!g) return;
   const v = await ask({
     title: sign > 0 ? `Abonar a ${g.name}` : `Retirar de ${g.name}`,
     msg: sign > 0 ? `Llevas ${fmt(g.saved)} de ${fmt(g.target)}.` : `Disponible: ${fmt(g.saved)}.`,
@@ -91,11 +94,13 @@ window.moveGoal = async (id, sign) => {
     g.saved >= g.target ? `¡Cumpliste la meta ${g.name}!` : sign > 0 ? `Abonaste ${fmt(v)}` : `Retiraste ${fmt(v)}`,
     sign > 0 ? 'check' : 'down'
   );
-};
-window.delGoal = id => {
+});
+action('delGoal', ({ id }) => {
+  id = Number(id);
   const g = state.goals.find(x => x.id === id);
+  if (!g) return;
   if (+$('gId').value === id) resetGoalForm();
   undoable(`Meta "${g.name}" eliminada`, 'trash', () => {
     state.goals = state.goals.filter(x => x.id !== id);
   });
-};
+});

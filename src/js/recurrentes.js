@@ -1,7 +1,7 @@
 import { state, $, fmt, esc, ic, today, save, catColor, newId, accName } from './core.js';
 import { generatePending, resume, monthlyNet } from './logic/recurrentes.js';
 import { round2 } from './logic/calculos.js';
-import { toast, fillCatSelect, undoable } from './ui.js';
+import { toast, fillCatSelect, undoable, action } from './ui.js';
 import { render } from './render.js';
 
 // ===== Recurrentes =====
@@ -27,7 +27,7 @@ export function renderRecurring() {
       <div class="daybadge"><div><b>${r.day}</b><br><small>día</small></div></div>
       <div style="min-width:0"><b>${esc(r.desc)}</b><div class="hint" style="font-size:.8rem;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><i class="swatch" style="background:${catColor(r.cat)}"></i>${esc(r.cat)} · ${esc(accName(r.account))}${r.active ? '' : ' · en pausa'}</div></div>
       <div class="num ${r.type === 'ingreso' ? 'pos' : 'neg'}" style="font-weight:700">${r.type === 'ingreso' ? '+' : '−'}${fmt(r.amount)}</div>
-      <div class="acts"><button class="iconbtn" onclick="editRec(${r.id})" aria-label="Editar">${ic('edit')}</button><button class="iconbtn" onclick="toggleRec(${r.id})" aria-label="${r.active ? 'Pausar' : 'Reanudar'}">${ic(r.active ? 'pause' : 'play')}</button><button class="iconbtn del" onclick="delRec(${r.id})" aria-label="Eliminar">${ic('trash')}</button></div>
+      <div class="acts"><button class="iconbtn" data-action="editRec" data-id="${r.id}" aria-label="Editar">${ic('edit')}</button><button class="iconbtn" data-action="toggleRec" data-id="${r.id}" aria-label="${r.active ? 'Pausar' : 'Reanudar'}">${ic(r.active ? 'pause' : 'play')}</button><button class="iconbtn del" data-action="delRec" data-id="${r.id}" aria-label="Eliminar">${ic('trash')}</button></div>
     </div>`
         )
         .join('')
@@ -50,8 +50,9 @@ function resetRecForm() {
 }
 $('rCancel').onclick = resetRecForm;
 
-window.editRec = id => {
-  const r = state.recurring.find(x => x.id === id);
+action('editRec', ({ id }) => {
+  const r = state.recurring.find(x => x.id === Number(id));
+  if (!r) return;
   $('rId').value = r.id;
   $(r.type === 'ingreso' ? 'rI' : 'rG').checked = true;
   fillCatSelect($('rCat'), r.type);
@@ -69,7 +70,7 @@ window.editRec = id => {
   $('recEditHint').hidden = false;
   $('recForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
   $('rDesc').focus();
-};
+});
 
 $('recForm').addEventListener('submit', e => {
   e.preventDefault();
@@ -99,8 +100,9 @@ $('recForm').addEventListener('submit', e => {
   render();
   toast(n ? `Programado. Se registraron ${n} movimiento(s) pendiente(s)` : 'Recurrente programado', 'repeat');
 });
-window.toggleRec = id => {
-  const r = state.recurring.find(x => x.id === id);
+action('toggleRec', ({ id }) => {
+  const r = state.recurring.find(x => x.id === Number(id));
+  if (!r) return;
   if (r.active) r.active = false;
   else {
     resume(r, today());
@@ -109,11 +111,13 @@ window.toggleRec = id => {
   save();
   render();
   toast(r.active ? 'Recurrente reanudado' : 'Recurrente en pausa', r.active ? 'play' : 'pause');
-};
-window.delRec = id => {
+});
+action('delRec', ({ id }) => {
+  id = Number(id);
   const r = state.recurring.find(x => x.id === id);
+  if (!r) return;
   if (+$('rId').value === id) resetRecForm();
   undoable(`"${r.desc}" eliminado. Los movimientos ya registrados se conservan`, 'trash', () => {
     state.recurring = state.recurring.filter(x => x.id !== id);
   });
-};
+});

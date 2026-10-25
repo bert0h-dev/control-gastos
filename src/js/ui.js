@@ -4,24 +4,46 @@ import { themeTokens, isDarkMode, paletteById } from './logic/temas.js';
 import { drawChart } from './resumen.js';
 import { drawLine } from './analisis.js';
 
+// ===== Acciones delegadas =====
+// El HTML generado no lleva onclick: cada botón declara data-action="nombre" y sus datos en data-*
+// (p. ej. data-id="123"). Un solo escuchador en document busca la acción y le pasa el dataset.
+// Los valores de data-* se leen siempre como texto, así que un nombre con comillas no puede inyectar código.
+// Las vistas registran sus acciones al cargarse, a veces antes de que este módulo termine de evaluarse
+// (importaciones circulares). Por eso el registro vive en una función declarada, que existe desde el inicio,
+// y no en una const, que daría "Cannot access before initialization".
+function registry() {
+  return (registry.map ||= new Map());
+}
+export function action(name, fn) {
+  if (registry().has(name)) throw new Error(`Acción duplicada: ${name}`);
+  registry().set(name, fn);
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el || el.disabled) return;
+  const fn = registry().get(el.dataset.action);
+  if (!fn) return console.warn(`Acción sin registrar: ${el.dataset.action}`);
+  fn(el.dataset, e);
+});
+
 // ===== UI helpers =====
-// 'action' agrega un botón al aviso, p. ej. { label: 'Deshacer', fn }
-export function toast(msg, icon = 'check', action) {
+// 'button' agrega un botón al aviso, p. ej. { label: 'Deshacer', fn }
+export function toast(msg, icon = 'check', button) {
   const t = document.createElement('div');
   t.className = 'toast';
   t.innerHTML = ic(icon) + `<span>${esc(msg)}</span>`;
-  if (action) {
+  if (button) {
     const b = document.createElement('button');
     b.className = 'toast-btn';
-    b.textContent = action.label;
+    b.textContent = button.label;
     b.onclick = () => {
       t.remove();
-      action.fn();
+      button.fn();
     };
     t.append(b);
   }
   $('toasts').append(t);
-  setTimeout(() => t.remove(), action ? 7000 : 2800);
+  setTimeout(() => t.remove(), button ? 7000 : 2800);
 }
 
 // Ejecuta un cambio destructivo y ofrece deshacerlo restaurando una copia del estado previo

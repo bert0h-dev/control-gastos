@@ -8,7 +8,21 @@ export default [
   {
     // Código del navegador
     files: ['src/**/*.js'],
-    languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.browser, openTx: 'readonly' } },
+    languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: globals.browser },
+    rules: {
+      // El HTML generado usa data-action (ver action() en ui.js), nunca código en atributos ni funciones globales
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'TemplateElement[value.raw=/\\son[a-z]+=/]',
+          message: 'No pongas onclick/oninput en el HTML generado: usa data-action y action() de ui.js.',
+        },
+        {
+          selector: "AssignmentExpression[left.object.name='window']",
+          message: 'No publiques funciones en window: registra una acción con action() de ui.js.',
+        },
+      ],
+    },
   },
   {
     // La lógica pura no debe tocar el navegador: si alguien usa document o window aquí, ESLint lo marca

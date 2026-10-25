@@ -99,7 +99,7 @@ Como los módulos se importan entre sí en círculo (las vistas importan `render
 
 1. **`logic/*`**: no dependen de nada externo. Se evalúan primero.
 2. **`core.js`**: importa `logic/fechas.js` y `logic/cuentas.js`. Al evaluarse **carga el estado desde `localStorage`** y lo migra.
-3. **`ui.js`**, **`render.js`** y **las vistas**: se evalúan en el orden en que se descubren los imports. Al evaluarse, cada vista **registra sus eventos** (`addEventListener`, `onclick`) y sus funciones `window.*`.
+3. **`ui.js`**, **`render.js`** y **las vistas**: se evalúan en el orden en que se descubren los imports. Al evaluarse, cada vista **registra sus eventos** (`addEventListener`) y sus acciones (`action()`).
 4. **`main.js`**: corre al final y arranca la app.
 
 ### Regla importante: código de nivel superior
@@ -318,13 +318,13 @@ Cada vista sigue la misma estructura:
 ```js
 import { ... } from './core.js';          // estado y utilidades
 import { ... } from './logic/....js';     // cálculos
-import { toast, ask } from './ui.js';     // interfaz común
+import { toast, ask, action } from './ui.js'; // interfaz común
 import { render } from './render.js';     // para redibujar después de cambiar datos
 
 export function renderAlgo(){ ... }        // pinta su sección; lo llama render()
 
 $('miForm').addEventListener(...);         // eventos de su sección
-window.accion = id => { ... };             // funciones que usa el HTML generado (onclick)
+action('borrarAlgo', ({ id }) => { ... }); // botones del HTML generado: <button data-action="borrarAlgo" data-id="...">
 ```
 
 | Archivo           | Pestaña o sección                   | Qué pinta                                                                                                   | Qué maneja                                                                                                                                                                                |
@@ -340,22 +340,42 @@ window.accion = id => { ... };             // funciones que usa el HTML generado
 | `apariencia.js`   | Ajustes › Apariencia                | Selector de modo y tarjetas de paletas con vista previa                                                     | Cambiar modo y paleta. Escucha `themechange` para actualizar las miniaturas                                                                                                               |
 | `datos.js`        | Ajustes › Tus datos y botón CSV     | —                                                                                                           | Exportar CSV y JSON, importar (con validación) y borrar todo                                                                                                                              |
 
-### Funciones globales `window.*`
+### Acciones delegadas (`data-action`)
 
-El HTML que generan las vistas usa `onclick="..."`, que solo ve funciones globales. Por eso estas se publican en `window`:
+El HTML que generan las vistas **no lleva `onclick`** ni las vistas publican funciones en `window`. Cada botón declara qué hace y con qué datos:
 
-| Función                                       | Archivo           |
-| --------------------------------------------- | ----------------- |
-| `openTx(id?, preset?)`, `delTx`, `filterTag`  | `movimientos.js`  |
-| `openAcc`, `delAcc`, `payCard`, `showAccount` | `cuentas.js`      |
-| `editBudget`, `delBudget`                     | `presupuestos.js` |
-| `editRec`, `toggleRec`, `delRec`              | `recurrentes.js`  |
-| `editGoal`, `moveGoal`, `delGoal`             | `metas.js`        |
-| `renameCat`, `delCat`                         | `categorias.js`   |
+```html
+<button data-action="delTx" data-id="1730000000000123">…</button>
+```
 
+y la vista registra la acción una sola vez:
+
+```js
+action('delTx', ({ id }) => { ... }); // recibe el dataset del botón; los valores llegan como texto
+```
+
+Un único escuchador de clics en `document` (en `ui.js`) busca el `[data-action]` más cercano y llama a su función. Ventajas:
+
+- **Seguridad:** los valores de `data-*` se leen siempre como texto. Antes, un nombre de categoría con comillas iba dentro de `onclick="delBudget('…')"` y podía romper el código o ejecutar otro. Con `esc()` en el atributo y `dataset` al leer, eso ya no es posible.
+- **Sin globales:** las funciones viven dentro de su módulo; lo que otro módulo necesita se exporta (por ejemplo `openTx` de `movimientos.js`, que usa `cuentas.js`).
+- **ESLint lo vigila:** marca como error un `onX=` dentro de una plantilla HTML y cualquier asignación a `window.algo`.
+- Registrar dos acciones con el mismo nombre lanza un error al cargar, para detectarlo enseguida.
+
+| Acción                                        | Archivo           | Datos             |
+| --------------------------------------------- | ----------------- | ----------------- |
+| `newTx`, `editTx`, `delTx`, `filterTag`       | `movimientos.js`  | `id`, `tag`       |
+| `editAcc`, `delAcc`, `payCard`, `showAccount` | `cuentas.js`      | `id` (de cuenta)  |
+| `editBudget`, `delBudget`                     | `presupuestos.js` | `cat`             |
+| `editRec`, `toggleRec`, `delRec`              | `recurrentes.js`  | `id`              |
+| `editGoal`, `moveGoal`, `delGoal`             | `metas.js`        | `id`, `sign` (±1) |
+| `renameCat`, `delCat`                         | `categorias.js`   | `type`, `cat`     |
+
+Los ids numéricos llegan como texto: conviértelos con `Number(id)` antes de compararlos. Las categorías se identifican por nombre, no por posición, para que sigan apuntando a la correcta aunque la lista cambie (por ejemplo, por una sincronización).
+
+Los elementos fijos de `index.html` (como `#btnNew`) siguen usando `$('id').onclick = ...` desde JS, que no implica código en el HTML.
 Los formularios de recurrentes y metas sirven para crear y para editar: `editRec` y `editGoal` cargan los valores en el formulario, cambian el título y muestran **Cancelar**.
 
-`openTx(null, { type: 'transferencia', to: 'tarjeta', amount: 500 })` abre la ventana ya llena; así funciona el botón **Pagar** de las tarjetas.
+`openTx(null, { type: 'transferencia', to: 'tarjeta', amount: 500 })` (exportada por `movimientos.js`) abre la ventana ya llena; así funciona el botón **Pagar** de las tarjetas.
 
 ---
 
