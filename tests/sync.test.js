@@ -11,7 +11,7 @@ const base = () => ({
   accounts: [{ id: 'banco', name: 'Banco' }],
   cats: { gasto: ['Comida'], ingreso: ['Salario'] },
   subcats: {},
-  budgets: { Comida: 3000 },
+  budgetPlans: [{ from: '0000-01', limits: { Comida: 3000 } }],
   theme: null,
   palette: 'esmeralda',
 });
@@ -35,10 +35,10 @@ describe('diffState', () => {
 
   it('envía bloques completos solo si cambian', () => {
     const next = base();
-    next.budgets.Comida = 3500;
+    next.budgetPlans[0].limits.Comida = 3500;
     next.palette = 'oceano';
     const c = diffState(base(), next);
-    expect(c.budgets).toEqual({ Comida: 3500 });
+    expect(c.budgetPlans).toEqual([{ from: '0000-01', limits: { Comida: 3500 } }]);
     expect(c.settings).toEqual({ theme: null, palette: 'oceano' });
     expect(c.accounts).toBeUndefined();
   });
@@ -84,7 +84,7 @@ describe('dos dispositivos a la vez', () => {
     a.tx.push({ id: 100, type: 'gasto', desc: 'Desde la PC', amount: 30 });
     const b = base();
     b.tx[1].amount = 75;
-    b.budgets.Comida = 2500;
+    b.budgetPlans[0].limits.Comida = 2500;
 
     // El servidor recibe primero A y luego B (cada uno envía solo su diff)
     const server = applyChanges(applyChanges(s, diffState(s, a)), diffState(s, b));
@@ -93,7 +93,7 @@ describe('dos dispositivos a la vez', () => {
       [2, 75],
       [100, 30],
     ]);
-    expect(server.budgets.Comida).toBe(2500);
+    expect(server.budgetPlans[0].limits.Comida).toBe(2500);
   });
 
   it('si los dos editan el mismo movimiento, gana el último en guardar', () => {

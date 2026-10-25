@@ -1,6 +1,7 @@
 import { state, $, fmt, fmt0, esc, today, monthName, month, allCats } from './core.js';
 import { monthSummary, budgetStatus, dailyAverage, inMonth } from './logic/calculos.js';
 import { projectMonth } from './logic/analisis.js';
+import { effectiveBudgets } from './logic/presupuestos.js';
 import { opts, fillCatSelect, fillAccSelect } from './ui.js';
 import { renderAccounts } from './cuentas.js';
 import { renderAnalysis } from './analisis.js';
@@ -49,7 +50,7 @@ function renderHeader() {
   $('kSave').textContent = s.rate === null ? '—' : s.rate + '%';
   $('kSaveBar').style.width = Math.max(0, Math.min(100, s.rate || 0)) + '%';
 
-  const b = budgetStatus(state.tx, state.budgets, month);
+  const b = budgetStatus(state.tx, effectiveBudgets(state.budgetPlans, month), month);
   if (b.items.length) {
     $('kBud').textContent = b.pct + '%';
     $('kBudBar').style.width = Math.min(100, b.pct) + '%';

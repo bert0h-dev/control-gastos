@@ -3,7 +3,7 @@ import { DEFAULT_ACCOUNTS } from './cuentas.js';
 
 export const DEFAULT = {
   tx: [],
-  budgets: {},
+  budgetPlans: [], // límites de presupuesto con historial (ver logic/presupuestos.js)
   recurring: [],
   goals: [],
   accounts: DEFAULT_ACCOUNTS,

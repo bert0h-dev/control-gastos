@@ -1,6 +1,7 @@
 // Cuentas, transferencias y estado de cuenta de tarjetas de crédito
 import { addMonths, clampDay } from './fechas.js';
 import { round2 } from './calculos.js';
+import { fromLegacy } from './presupuestos.js';
 
 export const KINDS = { efectivo: 'Efectivo', banco: 'Cuenta bancaria', ahorro: 'Ahorro / inversión', credito: 'Tarjeta de crédito' };
 
@@ -25,6 +26,11 @@ export function migrate(state) {
   for (const list of [state.tx, state.recurring])
     for (const x of list || []) if (!ids.has(x.account)) x.account = accountForMethod(x.method, state.accounts);
   if (!state.subcats || typeof state.subcats !== 'object') state.subcats = {};
+  // Presupuestos: el formato anterior (un solo objeto de límites) pasa a planes con historial.
+  // Se convierte también si budgetPlans está vacío: al cargar se mezcla con DEFAULT, que trae budgetPlans: []
+  const legacy = fromLegacy(state.budgets);
+  if (!Array.isArray(state.budgetPlans) || (!state.budgetPlans.length && legacy.length)) state.budgetPlans = legacy;
+  delete state.budgets;
   return state;
 }
 

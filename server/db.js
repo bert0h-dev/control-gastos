@@ -34,11 +34,27 @@ CREATE TABLE IF NOT EXISTS recurring (
   category TEXT, account_id TEXT, method TEXT, day INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
   start TEXT NOT NULL, last_gen TEXT, active INTEGER NOT NULL DEFAULT 1
 );
+-- budgets: formato anterior (un límite para todos los meses). Solo se lee para convertirlo a budget_plans
 CREATE TABLE IF NOT EXISTS budgets (category TEXT PRIMARY KEY, position INTEGER NOT NULL, limit_cents INTEGER NOT NULL);
+-- Límites que rigen desde un mes (from_month '0000-01' = desde siempre)
+CREATE TABLE IF NOT EXISTS budget_plans (from_month TEXT NOT NULL, category TEXT NOT NULL, position INTEGER NOT NULL, limit_cents INTEGER NOT NULL, PRIMARY KEY (from_month, category));
+CREATE TABLE IF NOT EXISTS budget_plan_months (from_month TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS goals (id INTEGER PRIMARY KEY, name TEXT NOT NULL, target_cents INTEGER NOT NULL, saved_cents INTEGER NOT NULL DEFAULT 0, deadline TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 `;
-const TABLES = ['accounts', 'categories', 'subcategories', 'transactions', 'transaction_tags', 'recurring', 'budgets', 'goals', 'settings'];
+const TABLES = [
+  'accounts',
+  'categories',
+  'subcategories',
+  'transactions',
+  'transaction_tags',
+  'recurring',
+  'budgets',
+  'budget_plans',
+  'budget_plan_months',
+  'goals',
+  'settings',
+];
 
 const toCents = n => Math.round((n || 0) * 100);
 const fromCents = c => c / 100;
@@ -60,6 +76,19 @@ export function copyDbTo(db, file) {
 
 // La base está vacía si nunca se guardó nada (la marca 'saved' se escribe en cada guardado)
 export const isEmpty = db => !db.prepare("SELECT 1 FROM settings WHERE key = 'saved'").get();
+
+// Planes de presupuesto; si solo existe la tabla anterior, sus límites pasan a regir "desde siempre"
+function readBudgetPlans(all) {
+  const months = all('SELECT from_month FROM budget_plan_months ORDER BY from_month').map(r => r.from_month);
+  if (months.length) {
+    const limits = Object.fromEntries(months.map(m => [m, {}]));
+    for (const r of all('SELECT * FROM budget_plans ORDER BY from_month, position'))
+      limits[r.from_month][r.category] = fromCents(r.limit_cents);
+    return months.map(m => ({ from: m, limits: limits[m] }));
+  }
+  const legacy = all('SELECT category, limit_cents FROM budgets ORDER BY position');
+  return legacy.length ? [{ from: '0000-01', limits: Object.fromEntries(legacy.map(b => [b.category, fromCents(b.limit_cents)])) }] : [];
+}
 
 export function readState(db) {
   const all = sql => db.prepare(sql).all();
@@ -106,9 +135,7 @@ export function readState(db) {
       lastGen: r.last_gen,
       active: !!r.active,
     })),
-    budgets: Object.fromEntries(
-      all('SELECT category, limit_cents FROM budgets ORDER BY position').map(b => [b.category, fromCents(b.limit_cents)])
-    ),
+    budgetPlans: readBudgetPlans(all),
     goals: all('SELECT * FROM goals ORDER BY id').map(g => ({
       id: g.id,
       name: g.name,
@@ -136,7 +163,8 @@ function writers(db) {
     acc: q('INSERT INTO accounts VALUES (?,?,?,?,?,?,?,?)'),
     cat: q('INSERT OR IGNORE INTO categories VALUES (?,?,?)'),
     sub: q('INSERT OR IGNORE INTO subcategories VALUES (?,?,?)'),
-    bud: q('INSERT INTO budgets VALUES (?,?,?)'),
+    planMonth: q('INSERT INTO budget_plan_months VALUES (?)'),
+    planLimit: q('INSERT INTO budget_plans VALUES (?,?,?,?)'),
     set: q('INSERT OR REPLACE INTO settings VALUES (?,?)'),
   };
   return {
@@ -203,9 +231,13 @@ function writers(db) {
       db.exec('DELETE FROM subcategories');
       for (const [c, list] of Object.entries(sc || {})) list.forEach((n, i) => s.sub.run(c, n, i));
     },
-    budgets(b) {
-      db.exec('DELETE FROM budgets');
-      Object.entries(b).forEach(([c, v], i) => s.bud.run(c, i, toCents(v)));
+    budgetPlans(plans) {
+      db.exec('DELETE FROM budgets; DELETE FROM budget_plans; DELETE FROM budget_plan_months;');
+      for (const p of plans) {
+        // El mes se guarda aparte para conservar planes sin límites (p. ej. "sin presupuesto desde enero")
+        s.planMonth.run(p.from);
+        Object.entries(p.limits).forEach(([c, v], i) => s.planLimit.run(p.from, c, i, toCents(v)));
+      }
     },
     settings(st) {
       s.set.run('theme', st.theme ?? null);
@@ -246,7 +278,7 @@ export function writeState(db, s) {
     w.accounts(s.accounts);
     w.cats(s.cats);
     w.subcats(s.subcats);
-    w.budgets(s.budgets);
+    w.budgetPlans(s.budgetPlans);
     w.settings(s);
     s.tx.forEach(w.tx);
     s.recurring.forEach(w.recurring);
@@ -265,7 +297,7 @@ export function applyDelta(db, c) {
     for (const r of c.recurring?.upsert || []) w.recurring(r);
     for (const id of c.goals?.delete || []) w.delGoals(id);
     for (const g of c.goals?.upsert || []) w.goals(g);
-    for (const k of ['accounts', 'cats', 'subcats', 'budgets', 'settings']) if (c[k]) w[k](c[k]);
+    for (const k of ['accounts', 'cats', 'subcats', 'budgetPlans', 'settings']) if (c[k]) w[k](c[k]);
     return w.bump();
   });
 }

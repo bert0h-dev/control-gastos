@@ -6,7 +6,7 @@
 //   completos, porque su orden importa y son pocos datos.
 
 export const COLLECTIONS = ['tx', 'recurring', 'goals'];
-export const BLOCKS = ['accounts', 'cats', 'subcats', 'budgets', 'settings'];
+export const BLOCKS = ['accounts', 'cats', 'subcats', 'budgetPlans', 'settings'];
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const settingsOf = s => ({ theme: s.theme ?? null, palette: s.palette ?? null });

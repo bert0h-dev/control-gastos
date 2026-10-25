@@ -26,6 +26,19 @@ describe('migración', () => {
   });
 });
 
+describe('migración de presupuestos', () => {
+  it('convierte los límites del formato anterior aunque se mezclen con el estado por defecto', () => {
+    // Así se cargan los datos guardados: { ...DEFAULT, ...guardado }, y DEFAULT trae budgetPlans: []
+    const s = migrate({ budgetPlans: [], ...{ tx: [], recurring: [], budgets: { Comida: 3000 } } });
+    expect(s.budgetPlans).toEqual([{ from: '0000-01', limits: { Comida: 3000 } }]);
+    expect(s).not.toHaveProperty('budgets');
+  });
+  it('no toca planes que ya existen', () => {
+    const plans = [{ from: '2026-10', limits: { Ocio: 500 } }];
+    expect(migrate({ tx: [], recurring: [], budgetPlans: plans, budgets: { Comida: 1 } }).budgetPlans).toEqual(plans);
+  });
+});
+
 describe('saldos', () => {
   const tx = [
     t('2026-10-01', 'ingreso', 20000, 'b'),
