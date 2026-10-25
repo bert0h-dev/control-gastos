@@ -1,0 +1,66 @@
+# Integración continua: en cada push y pull request revisa formato, lint, pruebas, compilación
+# y recorre la app en un navegador real. Si algo falla, el commit queda marcado en rojo.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Si llegan varios push seguidos, cancela las revisiones viejas de la misma rama
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  calidad:
+    name: Calidad (formato, lint, pruebas y build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # node:sqlite requiere Node 22.13 o superior
+          cache: npm
+      - run: npm ci
+      - name: Formato (Prettier)
+        run: npm run format:check
+      - name: Lint (ESLint)
+        run: npm run lint
+      - name: Pruebas unitarias (Vitest)
+        run: npm test
+      - name: Compilación (Vite)
+        run: npm run build
+
+  navegador:
+    name: Revisión en el navegador
+    needs: calidad
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TZ: America/Mexico_City # las fechas de la app son locales; se prueba en hora de México
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Instalar Chromium
+        run: npx playwright-core install --with-deps chromium
+      - name: Recorrer la app (npm run check)
+        run: npm run check
+      # Las capturas sirven para ver qué pasó, sobre todo si la revisión falla
+      - name: Guardar capturas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas
+          path: capturas/
+          retention-days: 7

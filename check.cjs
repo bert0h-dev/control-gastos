@@ -76,7 +76,8 @@ function sample() {
   const server = await createServer({ root: __dirname, server: { host: '127.0.0.1', port: 5174 }, logLevel: 'error' });
   await server.listen();
   const url = server.resolvedUrls.local[0];
-  const browser = await chromium.launch({ channel: 'msedge' });
+  // En tu PC usa el Edge instalado; en GitHub Actions (CI=true) usa el Chromium que instala el workflow
+  const browser = await chromium.launch(process.env.CI ? {} : { channel: 'msedge' });
   const errors = [];
   let runs = 0;
   for (const [name, vp, scheme] of [
@@ -264,4 +265,6 @@ function sample() {
       fs.unlinkSync(f);
     } catch {}
   console.log(errors.length ? 'PROBLEMAS:\n' + errors.join('\n') : 'Sin errores. Capturas en ./capturas');
+  // Código de salida distinto de 0 si hubo problemas, para que CI marque la revisión como fallida
+  process.exitCode = errors.length ? 1 : 0;
 })();

@@ -1,5 +1,7 @@
 # Control de Gastos
 
+[![CI](https://github.com/bert0h-dev/control-gastos/actions/workflows/ci.yml/badge.svg)](https://github.com/bert0h-dev/control-gastos/actions/workflows/ci.yml)
+
 Control de gastos personales: movimientos, cuentas y tarjetas, presupuestos, recurrentes, metas de ahorro y análisis. Los datos se guardan en una base **SQLite** local (`data/gastos.db`), con una copia en el navegador por si el servidor no responde.
 
 Requiere **Node 22.13 o superior** (usa el módulo integrado `node:sqlite`).
@@ -24,6 +26,8 @@ npm start         # producción: sirve dist/ y la API (http://localhost:3000)
 npm run build     # versión optimizada en dist/
 npm run preview   # sirve dist/ para probarla
 npm test          # pruebas unitarias de la lógica (Vitest)
+npm run lint      # ESLint
+npm run format    # aplica Prettier
 npm run check     # revisión en Edge: recorre las pestañas, registra un gasto y guarda capturas en capturas/
 ```
 
@@ -53,3 +57,7 @@ src/js/presupuestos.js, recurrentes.js, metas.js, categorias.js, datos.js
 La explicación completa de cada archivo, el orden de carga y las reglas está en [docs/arquitectura-js.md](docs/arquitectura-js.md).
 
 `state` y `month` viven en `core.js`. Desde otros módulos se leen importándolos y se cambian con `setState()` y `setMonth()`.
+
+## Integración continua
+
+En cada `push` o pull request a `main`, GitHub Actions (`.github/workflows/ci.yml`) revisa formato, lint, pruebas y compilación, y después recorre la app en Chromium con `npm run check`. Las capturas quedan como artefacto de la ejecución durante 7 días.
