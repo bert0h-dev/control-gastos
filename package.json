@@ -1,0 +1,23 @@
+{
+  "name": "control-gastos",
+  "version": "1.0.0",
+  "description": "Control de gastos personales",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run",
+    "check": "node check.cjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:watch": "vitest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "playwright-core": "^1.48.2",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}
