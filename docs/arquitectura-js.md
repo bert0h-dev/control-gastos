@@ -44,11 +44,24 @@ src/js/
 ## Flujo de datos
 
 ```
- localStorage ──load()──► state (core.js) ──► render() ──► cada vista ──► HTML
-                              ▲                               │
-                              │                               │ el usuario hace algo
-                              └──── save() ◄── modifica state ◄┘
+ SQLite (server/) ──GET /api/state──► init() ──► state (core.js) ──► render() ──► vistas ──► HTML
+        ▲                                           ▲                                │
+        │ PUT /api/state (agrupado 300 ms)          │                                │ el usuario hace algo
+        └────────────── save() ◄─ copia en localStorage ◄──── modifica state ◄───────┘
 ```
+
+### Persistencia
+
+- **La fuente de verdad es la base SQLite** del servidor (`data/gastos.db`). Ver `server/db.js` y `server/api.js`.
+- `init()` (en `core.js`) se llama una vez al arrancar desde `main.js`, **antes** del primer `render()`:
+  - Si el servidor tiene datos, los carga.
+  - Si el servidor está vacío y el navegador tiene datos de la versión anterior, **los sube una sola vez** (importación automática).
+  - Si quedaron cambios sin enviar (marca `controlGastos.v1.pendiente`), los reenvía.
+  - Si el servidor no responde, trabaja con la copia local y reintenta cada 10 segundos.
+- `save()` sigue siendo **síncrono** para las vistas: escribe la copia en `localStorage` al instante y programa el envío al servidor 300 ms después, agrupando cambios seguidos. Al cerrar la pestaña, lo pendiente se envía con `sendBeacon`.
+- `sync` (en `core.js`) indica si hay conexión y cuándo fue el último guardado. Cada cambio emite el evento `sync` en `document`, y `renderSync()` (`datos.js`) lo muestra en Ajustes.
+- El servidor **valida todo** lo que recibe con `sanitizeBackup()` y `migrate()`, y guarda dentro de una transacción: o se guarda completo o no se guarda nada.
+- Fase 1: se envía el estado completo en cada guardado y gana el último en guardar. Con un solo usuario es suficiente; ver `docs/analisis-sqlite.md` para las siguientes fases.
 
 Toda acción del usuario sigue el mismo ciclo:
 
@@ -96,6 +109,9 @@ Por las importaciones circulares, cuando una vista se evalúa puede que otra vis
 ## Capa de lógica (`logic/`)
 
 Funciones puras: reciben datos y devuelven resultados. Nunca modifican el DOM ni leen el estado global. Las fechas viajan como texto: `'YYYY-MM'` (mes) y `'YYYY-MM-DD'` (día), siempre en hora local. Los montos son números con dos decimales y las sumas se hacen en centavos para evitar errores como `0.1 + 0.2 = 0.30000000000000004`.
+
+### `logic/estado.js`
+`DEFAULT`, el estado inicial de la app. Está en `logic/` para que también lo use el servidor.
 
 ### `logic/fechas.js`
 Operaciones con fechas en texto. No depende de nada.
@@ -186,15 +202,18 @@ Importar y exportar. Depende de `calculos.js` y `cuentas.js`.
 ### `main.js`: punto de entrada
 **Deber ser:** arrancar la app y nada más. No debe tener lógica ni HTML.
 
-Hace, en orden:
+Hace, en orden (dentro de `start()`, que es asíncrona):
 1. Importa los estilos (`../css/styles.css`); Vite los inyecta en la página.
 2. Pone el mes actual en el formulario de recurrentes.
-3. Aplica el tema guardado (`applyTheme`).
-4. Genera los recurrentes pendientes (`runRecurring`).
-5. Dibuja todo (`render`).
-6. Abre la pestaña del `#hash` de la URL o la última usada.
-7. Registra `resize` (para redibujar las gráficas) y `hashchange` (para cambiar de pestaña).
-8. Si se generaron recurrentes, avisa con un `toast`.
+3. **Espera a `init()`**, que trae los datos del servidor. Nada se dibuja antes.
+4. Aplica el tema guardado (`applyTheme`).
+5. Genera los recurrentes pendientes (`runRecurring`).
+6. Dibuja todo (`render`).
+7. Abre la pestaña del `#hash` de la URL o la última usada.
+8. Conecta el indicador de guardado (`renderSync`) al evento `sync`.
+9. Avisa con un `toast` si se importaron datos, si no hay conexión o si se generaron recurrentes.
+
+Fuera de `start()` registra `resize` (para redibujar las gráficas) y `hashchange` (para cambiar de pestaña).
 
 ### `core.js`: estado y utilidades compartidas
 **Deber ser:** la única fuente del estado. Todos los demás leen de aquí. No debe importar vistas.
@@ -204,8 +223,10 @@ Hace, en orden:
 | `state` | Todos los datos: `tx`, `accounts`, `budgets`, `recurring`, `goals`, `cats`, `subcats`, `theme` |
 | `month` | El mes seleccionado en la cabecera (`'YYYY-MM'`) |
 | `setState(s)`, `setMonth(m)` | La única forma de **reemplazar** `state` o `month` desde otro módulo. `setState` también migra |
-| `load()`, `save()` | Leer y guardar en `localStorage` (clave `controlGastos.v1`) |
-| `DEFAULT`, `KEY`, `COLORS` | Estado inicial, clave de almacenamiento y paleta de categorías |
+| `init()` | Carga inicial desde el servidor (asíncrona). Importa los datos del navegador si el servidor está vacío |
+| `save()` | Guarda la copia local y programa el envío al servidor |
+| `sync` | Estado de la conexión: `{ online, saved, error }` |
+| `DEFAULT`, `KEY`, `COLORS` | Estado inicial (definido en `logic/estado.js`), clave de la copia local y paleta de categorías |
 | `newId()` | Ids únicos aunque se creen varios en el mismo milisegundo |
 | `today()` | Fecha de hoy |
 | `$`, `esc`, `ic` | Atajo de `getElementById`, escape de HTML (obligatorio al pintar texto del usuario) e ícono SVG |

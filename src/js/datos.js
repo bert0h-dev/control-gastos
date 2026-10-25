@@ -1,8 +1,17 @@
-import { DEFAULT, state, $, today, save, allCats, setState, newId, accName } from './core.js';
+import { DEFAULT, state, $, today, save, allCats, setState, newId, accName, sync } from './core.js';
 import { toCsv, parseCsv, sanitizeBackup } from './logic/datos.js';
 import { toast, ask, applyTheme } from './ui.js';
 import { render } from './render.js';
 import { filteredTx } from './movimientos.js';
+
+// ===== Estado de la conexión con la base de datos =====
+export function renderSync(){
+  const t = sync.saved ? new Date(sync.saved).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : null;
+  $('syncBox').className = 'sync ' + (sync.online ? 'ok' : 'off');
+  $('syncTitle').textContent = sync.online ? 'Guardado en la base de datos' : 'Sin conexión con el servidor';
+  $('syncDetail').textContent = sync.online ? (t ? `Último guardado: ${t}` : 'Aún no hay cambios guardados')
+    : 'Los cambios se guardan en este navegador y se enviarán al reconectar. ¿Está corriendo npm run dev o npm start?';
+}
 
 // ===== Exportar / importar =====
 export function download(name, content, type){

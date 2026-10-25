@@ -1,5 +1,7 @@
 # Análisis: ¿guardar los datos en SQLite en lugar del navegador?
 
+> **Estado (25 de octubre de 2026): fase 1 implementada** con la opción B. Ver `server/` y la sección "Persistencia" de `docs/arquitectura-js.md`. Diferencias con lo propuesto abajo: las tablas no usan llaves foráneas (para que datos antiguos con referencias rotas no impidan guardar), y la API corre dentro del servidor de Vite en desarrollo.
+
 **Respuesta corta:** sí es factible, y la arquitectura actual lo facilita. Pero "usar SQLite" puede significar tres cosas muy distintas, y solo una de ellas resuelve los problemas reales del proyecto. La recomendación es la **opción B: un servidor local con Node y SQLite**, hecha en fases.
 
 ---

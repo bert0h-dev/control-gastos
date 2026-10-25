@@ -278,7 +278,8 @@
       </div>
       <div class="card">
         <div class="card-hd"><h2>Tus datos</h2></div>
-        <p class="hint" style="margin:0 0 14px">Todo se guarda en este navegador. Haz un respaldo de vez en cuando para no perder nada.</p>
+        <div class="sync" id="syncBox"><i class="sync-dot"></i><div><b id="syncTitle">Conectando…</b><div class="hint" id="syncDetail"></div></div></div>
+        <p class="hint" style="margin:0 0 14px">Tus datos se guardan en una base SQLite en tu computadora (<code>data/gastos.db</code>). Para respaldarla, copia ese archivo o descarga un respaldo JSON.</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn sec" id="btnExportJson"><svg class="ic"><use href="#i-download"/></svg>Descargar respaldo</button>
           <button class="btn sec" id="btnImport"><svg class="ic"><use href="#i-upload"/></svg>Importar JSON o CSV</button>

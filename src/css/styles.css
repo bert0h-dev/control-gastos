@@ -335,3 +335,11 @@ a:hover{text-decoration:underline}
 
 .toast-btn{margin-left:8px;background:none;border:0;color:var(--gold);font:700 .88rem var(--f-body);cursor:pointer;padding:4px 6px;border-radius:6px}
 .toast-btn:hover{background:color-mix(in srgb,var(--bg) 15%,transparent)}
+
+/* Estado de la conexión con la base de datos */
+.sync{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:var(--surface-2);margin-bottom:12px;font-size:.88rem}
+.sync-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);margin-top:5px;flex:none}
+.sync.ok .sync-dot{background:var(--pos);box-shadow:0 0 0 4px color-mix(in srgb,var(--pos) 20%,transparent)}
+.sync.off{background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.sync.off .sync-dot{background:var(--warn)}
+code{font-family:var(--f-mono);font-size:.85em;background:var(--surface-2);padding:1px 5px;border-radius:5px}

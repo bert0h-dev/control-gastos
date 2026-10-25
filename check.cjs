@@ -33,13 +33,17 @@ function sample() {
 }
 
 (async () => {
-  // Levanta el servidor de desarrollo de Vite en un puerto libre
+  // Base de datos temporal: la revisión nunca toca data/gastos.db
+  const dbFile = path.join(require('os').tmpdir(), `gastos-check-${Date.now()}.db`);
+  process.env.GASTOS_DB = dbFile;
+  // Levanta el servidor de desarrollo de Vite (con la API de SQLite) en un puerto fijo
   const { createServer } = await import('vite');
   const server = await createServer({ root: __dirname, server: { host: '127.0.0.1', port: 5174 }, logLevel: 'error' });
   await server.listen();
   const url = server.resolvedUrls.local[0];
   const browser = await chromium.launch({ channel: 'msedge' });
   const errors = [];
+  let runs = 0;
   for (const [name, vp, scheme] of [['escritorio-claro', { width: 1280, height: 900 }, 'light'], ['escritorio-oscuro', { width: 1280, height: 900 }, 'dark'], ['celular', { width: 390, height: 844 }, 'light']]) {
     const ctx = await browser.newContext({ viewport: vp, colorScheme: scheme });
     const page = await ctx.newPage();
@@ -95,11 +99,23 @@ function sample() {
     } catch (e) { errors.push(`[${name}] no se pudo registrar desde el modal: ${e.message.split('\n')[0]}`); }
     const ok = await page.locator('.tx .meta b', { hasText: 'Prueba automática' }).count();
     if (!ok) errors.push(`[${name}] el movimiento nuevo no apareció en la lista`);
+    // Persistencia: el gasto debe estar en SQLite y seguir ahí al recargar la página
+    await page.waitForTimeout(800); // el guardado se agrupa durante 300 ms
+    const api = await (await fetch(url + 'api/state')).json();
+    const inDb = api.state?.tx.filter(x => x.desc === 'Prueba automática').length || 0;
+    if (inDb !== runs + 1) errors.push(`[${name}] SQLite tiene ${inDb} movimientos de prueba; se esperaban ${runs + 1}`);
+    if (runs === 0 && !(api.state?.tx.length >= 45)) errors.push(`[${name}] no se importaron a SQLite los datos del navegador`);
+    await page.reload(); await page.waitForTimeout(600);
+    await page.click('.tab[data-tab="movimientos"]');
+    if (!(await page.locator('.tx .meta b', { hasText: 'Prueba automática' }).count())) errors.push(`[${name}] tras recargar, el movimiento no está`);
+    if (!(await page.textContent('#syncTitle')).includes('Guardado')) errors.push(`[${name}] el indicador no muestra conexión con la base`);
+    runs++;
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
     if (overflow) errors.push(`[${name}] la página tiene scroll horizontal`);
     await ctx.close();
   }
   await browser.close();
   await server.close();
+  for (const f of [dbFile, dbFile + '-wal', dbFile + '-shm']) try { fs.unlinkSync(f); } catch {}
   console.log(errors.length ? 'PROBLEMAS:\n' + errors.join('\n') : 'Sin errores. Capturas en ./capturas');
 })();
