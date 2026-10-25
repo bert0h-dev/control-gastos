@@ -69,8 +69,10 @@ function sample() {
 
 (async () => {
   // Base de datos temporal: la revisión nunca toca data/gastos.db
-  const dbFile = path.join(require('os').tmpdir(), `gastos-check-${Date.now()}.db`);
-  process.env.GASTOS_DB = dbFile;
+  // Base y respaldos en una carpeta temporal propia, que se borra al terminar
+  const tmpRoot = fs.mkdtempSync(path.join(require('os').tmpdir(), 'gastos-check-'));
+  process.env.GASTOS_DB = path.join(tmpRoot, 'gastos.db');
+  process.env.GASTOS_RESPALDOS = path.join(tmpRoot, 'respaldos');
   // Levanta el servidor de desarrollo de Vite (con la API de SQLite) en un puerto fijo
   const { createServer } = await import('vite');
   const server = await createServer({ root: __dirname, server: { host: '127.0.0.1', port: 5174 }, logLevel: 'error' });
@@ -258,12 +260,57 @@ function sample() {
     errors.push(`[dos dispositivos] ${e.message.split('\n')[0]}`);
   }
 
+  // Respaldos: el diario existe, se puede crear uno manual, descargar la base y restaurar
+  try {
+    const ctx = await browser.newContext();
+    const p = await ctx.newPage();
+    p.on('pageerror', e => errors.push(`[respaldos] ${e.message}`));
+    await p.goto(url + '#ajustes');
+    await p.waitForTimeout(800);
+    const items = () => p.locator('#bkList .bk').count();
+    const before = await items();
+    if (before < 1) errors.push('[respaldos] no se creó el respaldo diario');
+    await p.click('#btnBackupNow');
+    await p.waitForTimeout(500);
+    if ((await items()) !== before + 1) errors.push('[respaldos] "Crear respaldo ahora" no agregó uno a la lista');
+    const db = Buffer.from(await (await fetch(url + 'api/backups/actual')).arrayBuffer());
+    if (!db.subarray(0, 15).toString().startsWith('SQLite format 3'))
+      errors.push('[respaldos] la descarga de la base no es un archivo SQLite');
+    const bad = await fetch(url + 'api/backups/..%2Fgastos.db');
+    if (bad.status !== 400) errors.push(`[respaldos] una ruta con ../ respondió ${bad.status} en lugar de 400`);
+    // Restaurar el diario (anterior a los gastos de prueba): esos gastos deben desaparecer
+    const { backups } = await (await fetch(url + 'api/backups')).json();
+    const daily = backups.filter(b => b.kind === 'diario').pop();
+    await p.click(`[data-action="restoreBackup"][data-name="${daily.name}"]`);
+    await p.click('#dlgOk');
+    await p.waitForTimeout(2000);
+    const after = (await (await fetch(url + 'api/state')).json()).state.tx.map(x => x.desc);
+    if (after.includes('Prueba automática')) errors.push('[respaldos] restaurar no regresó los datos al respaldo');
+    const list = (await (await fetch(url + 'api/backups')).json()).backups;
+    if (!list.some(b => b.kind === 'antes-de-restaurar')) errors.push('[respaldos] no se guardó una copia antes de restaurar');
+    await p.click('.tab[data-tab="movimientos"]');
+    await p.locator('#fPeriod').selectOption('todo');
+    if (await p.locator('.tx .meta b', { hasText: 'Prueba automática' }).count())
+      errors.push('[respaldos] tras restaurar, la pantalla sigue mostrando datos viejos');
+    await p.click('.tab[data-tab="ajustes"]');
+    await p.waitForTimeout(300);
+    await p.screenshot({ path: path.join(out, 'respaldos.png'), fullPage: true });
+    // Los diálogos de confirmación sin campo de texto deben abrirse (antes fallaban por maxLength = -1)
+    await p.click('#btnReset');
+    if (await p.locator('#dlg').isHidden()) errors.push('[diálogos] "Borrar todos los datos" no abrió la confirmación');
+    else await p.click('#dlgCancel');
+    await ctx.close();
+  } catch (e) {
+    errors.push(`[respaldos] ${e.message.split('\n')[0]}`);
+  }
+
   await browser.close();
   await server.close();
-  for (const f of [dbFile, dbFile + '-wal', dbFile + '-shm'])
-    try {
-      fs.unlinkSync(f);
-    } catch {}
+  // En Windows la base sigue abierta por el servidor de Vite hasta que termina el proceso; si no se puede borrar
+  // ahora, se queda en la carpeta temporal del sistema (no afecta la revisión)
+  try {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  } catch {}
   console.log(errors.length ? 'PROBLEMAS:\n' + errors.join('\n') : 'Sin errores. Capturas en ./capturas');
   // Código de salida distinto de 0 si hubo problemas, para que CI marque la revisión como fallida
   process.exitCode = errors.length ? 1 : 0;

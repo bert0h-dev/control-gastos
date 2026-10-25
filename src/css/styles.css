@@ -1773,3 +1773,47 @@ code {
   width: 13px;
   height: 13px;
 }
+
+/* Respaldos */
+.bk-list {
+  display: grid;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.bk-list:empty {
+  display: none;
+}
+.bk {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+.bk:first-child {
+  border-top: 0;
+}
+.bk-info {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.bk-info b {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.bk-info .hint {
+  font-size: 0.76rem;
+}
+.bk-list > .hint {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+a.btn {
+  text-decoration: none;
+}
+a.iconbtn {
+  color: var(--muted);
+}

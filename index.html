@@ -477,12 +477,24 @@
               </div>
             </div>
             <p class="hint" style="margin: 0 0 14px">
-              Tus datos se guardan en una base SQLite en tu computadora (<code>data/gastos.db</code>). Para respaldarla, copia ese archivo o
-              descarga un respaldo JSON.
+              Tus datos se guardan en una base SQLite en tu computadora (<code>data/gastos.db</code>). Cada día se crea un respaldo
+              automático.
             </p>
+            <div class="sub-h">Respaldos automáticos</div>
+            <p class="hint" style="margin: 0 0 10px" id="bkHint"></p>
+            <div class="bk-list" id="bkList"></div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px">
+              <button class="btn sec" id="btnBackupNow">
+                <svg class="ic"><use href="#i-plus" /></svg>Crear respaldo ahora
+              </button>
+              <a class="btn sec" id="btnDownloadDb" href="/api/backups/actual" download
+                ><svg class="ic"><use href="#i-download" /></svg>Descargar base completa</a
+              >
+            </div>
+            <div class="sub-h">Exportar e importar</div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap">
               <button class="btn sec" id="btnExportJson">
-                <svg class="ic"><use href="#i-download" /></svg>Descargar respaldo
+                <svg class="ic"><use href="#i-download" /></svg>Descargar respaldo JSON
               </button>
               <button class="btn sec" id="btnImport">
                 <svg class="ic"><use href="#i-upload" /></svg>Importar JSON o CSV

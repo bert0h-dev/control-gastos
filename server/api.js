@@ -5,8 +5,17 @@
 //   PUT   /api/state     reemplaza todo (importación inicial, restaurar respaldo)
 //   PATCH /api/changes   aplica solo lo que cambió (uso normal)
 //   POST  en las dos rutas anteriores equivale a PUT / PATCH (para navigator.sendBeacon al cerrar la página)
-import { resolve } from 'node:path';
-import { openDb, isEmpty, readState, writeState, applyDelta, getVersion, lastSaved } from './db.js';
+//
+//   GET   /api/backups                lista de respaldos y su configuración
+//   POST  /api/backups                crea un respaldo ahora
+//   GET   /api/backups/actual         descarga la base completa tal como está
+//   GET   /api/backups/:nombre        descarga un respaldo
+//   POST  /api/backups/:nombre/restore  restaura un respaldo (antes respalda lo actual)
+import { resolve, dirname, join } from 'node:path';
+import { createReadStream, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { openDb, isEmpty, readState, writeState, applyDelta, getVersion, lastSaved, copyDbTo } from './db.js';
+import { listBackups, createBackup, ensureDailyBackup, restoreBackup, isBackupName } from './respaldos.js';
 import {
   sanitizeBackup,
   sanitizeTx,
@@ -22,6 +31,9 @@ import { migrate } from '../src/js/logic/cuentas.js';
 import { DEFAULT } from '../src/js/logic/estado.js';
 
 export const DB_PATH = resolve(process.env.GASTOS_DB || 'data/gastos.db');
+// Respaldos junto a la base (data/respaldos/), salvo que se indique otra carpeta
+export const BACKUP_DIR = resolve(process.env.GASTOS_RESPALDOS || join(dirname(DB_PATH), 'respaldos'));
+export const BACKUP_KEEP = Math.max(1, Number(process.env.GASTOS_RESPALDOS_CONSERVAR) || 30);
 const MAX_BODY = 20 * 1024 * 1024;
 
 const send = (res, status, data) => {
@@ -31,6 +43,24 @@ const send = (res, status, data) => {
   res.end(JSON.stringify(data));
 };
 const badRequest = msg => Object.assign(new Error(msg), { status: 400 });
+
+// Envía un archivo como descarga. 'done' se llama al terminar (p. ej. para borrar un temporal)
+function sendFile(res, file, downloadName, done = () => {}) {
+  const stream = createReadStream(file);
+  stream.on('open', () => {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/vnd.sqlite3');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    stream.pipe(res);
+  });
+  stream.on('error', () => send(res, 404, { error: 'Respaldo no encontrado' }));
+  stream.on('close', () => {
+    try {
+      done();
+    } catch {}
+  });
+}
 
 function readBody(req) {
   return new Promise((ok, fail) => {
@@ -84,9 +114,25 @@ export function sanitizeChanges(c) {
 }
 
 // La base se abre en la primera petición, no al importar el módulo (Vitest también carga la config de Vite)
-export function apiMiddleware(path = DB_PATH) {
+export function apiMiddleware(path = DB_PATH, { backupDir = BACKUP_DIR, keep = BACKUP_KEEP } = {}) {
   let db;
-  const getDb = () => (db ||= openDb(path));
+  // Al abrir la base se crea el respaldo del día si falta, y se vuelve a revisar cada hora
+  const daily = () => {
+    try {
+      const name = ensureDailyBackup(db, backupDir, keep);
+      if (name) console.log(`[respaldos] creado ${name}`);
+    } catch (e) {
+      console.error('[respaldos] no se pudo crear el respaldo diario:', e.message);
+    }
+  };
+  const getDb = () => {
+    if (!db) {
+      db = openDb(path);
+      daily();
+      setInterval(daily, 60 * 60 * 1000).unref();
+    }
+    return db;
+  };
   const meta = d => ({ version: getVersion(d), saved: lastSaved(d) });
   return async (req, res, next) => {
     const url = (req.url || '').split('?')[0];
@@ -103,12 +149,38 @@ export function apiMiddleware(path = DB_PATH) {
         const state = migrate(sanitizeBackup(JSON.parse(await readBody(req)), DEFAULT));
         [state.tx, state.recurring, state.goals].forEach(ensureUniqueIds);
         writeState(getDb(), state);
+        daily();
         return send(res, 200, { ok: true, count: state.tx.length, ...meta(getDb()) });
       }
       if (url === '/api/changes' && (m === 'PATCH' || m === 'POST')) {
         const changes = sanitizeChanges(JSON.parse(await readBody(req)).changes);
         applyDelta(getDb(), changes);
+        daily();
         return send(res, 200, { ok: true, ...meta(getDb()) });
+      }
+      // ----- Respaldos -----
+      if (url === '/api/backups' && m === 'GET') return send(res, 200, { dir: backupDir, keep, backups: listBackups(backupDir) });
+      if (url === '/api/backups' && m === 'POST') {
+        const name = createBackup(getDb(), backupDir, 'manual');
+        return send(res, 200, { ok: true, name });
+      }
+      if (url === '/api/backups/actual' && m === 'GET') {
+        // Copia consistente en un archivo temporal, se envía y se borra
+        const tmp = join(tmpdir(), `gastos-descarga-${process.pid}-${Date.now()}.db`);
+        copyDbTo(getDb(), tmp);
+        const day = new Date().toISOString().slice(0, 10);
+        return sendFile(res, tmp, `gastos-${day}.db`, () => unlinkSync(tmp));
+      }
+      const bk = url.match(/^\/api\/backups\/([^/]+?)(\/restore)?$/);
+      if (bk) {
+        const name = decodeURIComponent(bk[1]);
+        // Solo nombres con el formato de respaldo: impide pedir archivos fuera de la carpeta (../)
+        if (!isBackupName(name)) throw badRequest('Nombre de respaldo inválido');
+        if (!bk[2] && m === 'GET') return sendFile(res, join(backupDir, name), name);
+        if (bk[2] && m === 'POST') {
+          const safety = restoreBackup(getDb(), backupDir, name);
+          return send(res, 200, { ok: true, restored: name, safety, ...meta(getDb()) });
+        }
       }
       if (url === '/api/health') return send(res, 200, { ok: true, db: path });
       return send(res, 404, { error: 'Ruta no encontrada' });

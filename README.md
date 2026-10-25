@@ -15,7 +15,9 @@ npm start         # abre http://localhost:3000
 
 Para usarla desde el celular en la misma red Wi-Fi, arráncala con `HOST=0.0.0.0` (en PowerShell: `$env:HOST="0.0.0.0"; npm start`) y entra a `http://IP-de-tu-PC:3000`. **No tiene inicio de sesión:** cualquiera en tu red podría verla, así que úsalo solo en redes de confianza.
 
-**Respaldo:** copia `data/gastos.db` (con la app cerrada), o descarga el respaldo JSON desde Ajustes. Otra ruta para la base: variable `GASTOS_DB`.
+**Respaldos:** el servidor crea una copia diaria de la base en `data/respaldos/` y conserva las últimas 30. Desde **Ajustes › Tus datos** puedes crear uno al momento, descargarlos, descargar la base completa o **restaurar** uno (antes de restaurar se guarda una copia de lo actual). Para tener una copia fuera de la PC, sincroniza la carpeta `data/respaldos/` con OneDrive o Google Drive.
+
+Variables opcionales: `GASTOS_DB` (ruta de la base), `GASTOS_RESPALDOS` (carpeta de respaldos) y `GASTOS_RESPALDOS_CONSERVAR` (cuántos conservar, 30 por defecto).
 
 ## Comandos
 
@@ -37,6 +39,7 @@ npm run check     # revisión en Edge: recorre las pestañas, registra un gasto 
 index.html            estructura de la página
 server/db.js          esquema SQLite, lectura y escritura del estado (único archivo que conoce la base)
 server/api.js         API HTTP: GET y PUT /api/state, valida con sanitizeBackup()
+server/respaldos.js   respaldos diarios, descarga y restauración
 server/index.js       servidor de producción (dist/ + API)
 vite.config.js        conecta la API al servidor de Vite en desarrollo
 data/                 la base de datos (ignorada por Git)

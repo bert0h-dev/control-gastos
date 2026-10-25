@@ -67,6 +67,7 @@ src/js/
 - `sync` (en `core.js`) indica si hay conexión, la versión y cuándo fue el último guardado. Cada cambio emite el evento `sync`, y `renderSync()` (`datos.js`) lo muestra en Ajustes.
 - El servidor **valida todo** lo que recibe con los validadores de `logic/datos.js` (`sanitizeTx`, `sanitizeAccounts`, etc.) y aplica cada paquete dentro de una transacción: o se guarda completo o no se guarda nada.
 - `PUT /api/state` (reemplazar todo) solo se usa para inicializar una base vacía o reenviar cambios de la fase 1.
+- **Respaldos** (`server/respaldos.js`): una copia diaria con `VACUUM INTO` (consistente aunque haya escrituras), creada al abrir la base, después de cada guardado si aún no existe la del día, y revisada cada hora. Se conservan las últimas 30. Restaurar valida los datos del respaldo con `sanitizeBackup()`, guarda antes una copia `-antes-de-restaurar` y sube la versión de la base, así que los demás dispositivos reciben los datos restaurados en su siguiente revisión. La vista está en `datos.js` (`loadBackups()`), que se actualiza con el evento `tabchange` al abrir Ajustes.
 
 Toda acción del usuario sigue el mismo ciclo:
 
