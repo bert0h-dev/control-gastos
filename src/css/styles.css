@@ -1817,3 +1817,81 @@ a.btn {
 a.iconbtn {
   color: var(--muted);
 }
+
+/* Historial de presupuestos */
+.bud-copy {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.bud-copy .hint {
+  margin: 0;
+}
+.bud-hist {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+.bud-hist th,
+.bud-hist td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+}
+.bud-hist th:first-child,
+.bud-hist td:first-child {
+  text-align: left;
+}
+.bud-hist th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 700;
+}
+.bud-hist th.cur {
+  color: var(--fg);
+}
+.bud-hist .l {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.bh-cell span {
+  display: inline-block;
+  min-width: 46px;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-family: var(--f-mono);
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+}
+.bh-cell small,
+.bh-sum small {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.bh-none {
+  color: var(--muted);
+}
+.bud-hist tfoot td {
+  font-weight: 700;
+  border-bottom: 0;
+  font-family: var(--f-mono);
+}
+.bud-hist tfoot td:first-child {
+  font-family: var(--f-body);
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.bud-hist .empty {
+  text-align: center;
+}

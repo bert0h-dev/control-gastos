@@ -2,6 +2,7 @@
 import { round2 } from './calculos.js';
 import { KINDS } from './cuentas.js';
 import { PALETTES } from './temas.js';
+import { fromLegacy } from './presupuestos.js';
 
 export const CSV_HEADER = [
   'Fecha',
@@ -196,6 +197,15 @@ export const sanitizeBudgets = b =>
           .map(([k, v]) => [str(k, 30), num(v)])
       )
     : null;
+// Planes de presupuesto: { from: 'YYYY-MM', limits: { categoría: monto } }
+export const sanitizeBudgetPlans = plans =>
+  Array.isArray(plans)
+    ? plans
+        .filter(p => p && MONTH.test(p.from))
+        .map(p => ({ from: p.from, limits: sanitizeBudgets(p.limits) || {} }))
+        .filter((p, i, all) => all.findIndex(q => q.from === p.from) === i)
+    : null;
+
 export function sanitizeSettings(s) {
   if (!s || typeof s !== 'object') return null;
   return {
@@ -216,7 +226,8 @@ export function sanitizeBackup(d, defaults) {
     .map((x, i) => (x.id === null ? { ...x, id: Date.now() + i } : x));
   out.cats = sanitizeCats(d.cats, out.cats) ?? out.cats;
   out.subcats = sanitizeSubcats(d.subcats) ?? out.subcats;
-  out.budgets = sanitizeBudgets(d.budgets) ?? out.budgets;
+  // Respaldos anteriores traen 'budgets' (sin historial); se convierten a planes
+  out.budgetPlans = sanitizeBudgetPlans(d.budgetPlans) ?? fromLegacy(sanitizeBudgets(d.budgets));
   if (Array.isArray(d.recurring)) out.recurring = d.recurring.map(sanitizeRecurring).filter(Boolean);
   if (Array.isArray(d.goals)) out.goals = d.goals.map(sanitizeGoal).filter(Boolean);
   Object.assign(out, sanitizeSettings({ theme: d.theme, palette: d.palette ?? defaults.palette }));

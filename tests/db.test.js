@@ -155,6 +155,19 @@ describe('cambios por fila (fase 2)', () => {
   });
 });
 
+describe('presupuestos del formato anterior', () => {
+  it('una base con la tabla budgets (sin historial) se lee como límites vigentes desde siempre', () => {
+    const db = openDb(':memory:');
+    db.exec("INSERT INTO budgets VALUES ('Comida', 0, 350000), ('Ocio', 1, 100050)");
+    db.exec("INSERT INTO settings VALUES ('saved', '2026-10-01T00:00:00Z')");
+    expect(readState(db).budgetPlans).toEqual([{ from: '0000-01', limits: { Comida: 3500, Ocio: 1000.5 } }]);
+    // Al guardar de nuevo, queda en el formato nuevo y la tabla anterior se vacía
+    writeState(db, migrate({ ...structuredClone(DEFAULT), budgetPlans: readState(db).budgetPlans }));
+    expect(db.prepare('SELECT COUNT(*) n FROM budgets').get().n).toBe(0);
+    expect(readState(db).budgetPlans).toEqual([{ from: '0000-01', limits: { Comida: 3500, Ocio: 1000.5 } }]);
+  });
+});
+
 describe('validación de cambios', () => {
   it('descarta movimientos inválidos y ids no numéricos', () => {
     const c = sanitizeChanges({

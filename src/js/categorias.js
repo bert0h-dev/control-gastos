@@ -1,5 +1,6 @@
 import { state, $, esc, ic, save, allCats, catColor } from './core.js';
 import { renameCategory } from './logic/calculos.js';
+import { renameInPlans } from './logic/presupuestos.js';
 import { toast, ask, undoable, action } from './ui.js';
 import { render } from './render.js';
 
@@ -50,6 +51,6 @@ action('delCat', ({ type: t, cat: c }) => {
   const used = state.tx.some(x => x.cat === c);
   undoable(`Categoría "${c}" eliminada${used ? '. Sus movimientos conservan el nombre' : ''}`, 'trash', () => {
     state.cats[t].splice(state.cats[t].indexOf(c), 1);
-    delete state.budgets[c];
+    state.budgetPlans = renameInPlans(state.budgetPlans, c, null);
   });
 });

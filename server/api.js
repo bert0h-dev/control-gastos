@@ -24,7 +24,7 @@ import {
   sanitizeAccounts,
   sanitizeCats,
   sanitizeSubcats,
-  sanitizeBudgets,
+  sanitizeBudgetPlans,
   sanitizeSettings,
 } from '../src/js/logic/datos.js';
 import { migrate } from '../src/js/logic/cuentas.js';
@@ -108,7 +108,7 @@ export function sanitizeChanges(c) {
   }
   if (c.cats) out.cats = sanitizeCats(c.cats, DEFAULT.cats);
   if (c.subcats) out.subcats = sanitizeSubcats(c.subcats);
-  if (c.budgets) out.budgets = sanitizeBudgets(c.budgets);
+  if (c.budgetPlans) out.budgetPlans = sanitizeBudgetPlans(c.budgetPlans);
   if (c.settings) out.settings = sanitizeSettings(c.settings);
   return out;
 }

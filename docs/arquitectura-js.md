@@ -118,6 +118,21 @@ Por las importaciones circulares, cuando una vista se evalúa puede que otra vis
 
 Funciones puras: reciben datos y devuelven resultados. Nunca modifican el DOM ni leen el estado global. Las fechas viajan como texto: `'YYYY-MM'` (mes) y `'YYYY-MM-DD'` (día), siempre en hora local. Los montos son números con dos decimales y las sumas se hacen en centavos para evitar errores como `0.1 + 0.2 = 0.30000000000000004`.
 
+### `logic/presupuestos.js`
+
+Presupuestos con historial. Los límites se guardan como planes que rigen desde un mes: `budgetPlans = [{ from: 'YYYY-MM', limits: { categoría: monto } }]`. El plan `from: '0000-01'` (`SIEMPRE`) son los límites anteriores al historial.
+
+| Función                                          | Qué hace                                                                                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `effectiveBudgets(planes, m)`                    | Límites que rigen en el mes `m` (los del plan más reciente que empezó en o antes de `m`)                                  |
+| `planStart(planes, m)`                           | Desde qué mes rigen esos límites                                                                                          |
+| `setLimit(planes, m, cat, monto \| null)`        | Cambia o quita un límite **desde** `m`; los meses anteriores no cambian                                                   |
+| `setPlan`, `copyToNextMonth`, `nextMonthDiffers` | Reemplazar los límites desde un mes, copiar los de `m` al siguiente, saber si son distintos                               |
+| `renameInPlans(planes, de, a \| null)`           | Renombra o elimina una categoría en todos los planes                                                                      |
+| `normalize(planes)`                              | Ordena y quita planes que repiten al anterior                                                                             |
+| `fromLegacy(budgets)`                            | Convierte el formato anterior (un solo objeto de límites)                                                                 |
+| `budgetHistory(tx, planes, meses)`               | Estado de cada categoría mes a mes con los límites de entonces; los meses sin movimientos se marcan `noData` y no cuentan |
+
 ### `logic/sync.js`
 
 Sincronización por cambios. No depende de nada.
@@ -400,7 +415,7 @@ Los formularios de recurrentes y metas sirven para crear y para editar: `editRec
     method: 'Efectivo'           // solo en datos antiguos; hoy se usa account
   }],
   accounts: [{ id, name, kind, initial, limit?, cutDay?, payDay? }],   // initial < 0 en crédito = deuda
-  budgets: { 'Alimentación': 3500 },
+  budgetPlans: [{ from: '0000-01', limits: { 'Alimentación': 3500 } }, { from: '2026-11', limits: { 'Alimentación': 4000 } }],
   recurring: [{ id, type, desc, amount, cat, account, day, start: 'YYYY-MM', lastGen: 'YYYY-MM' | null, active }],
   goals: [{ id, name, target, saved, deadline: 'YYYY-MM' }],
   cats: { gasto: [...], ingreso: [...] },

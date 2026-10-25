@@ -360,19 +360,34 @@
               <h2>Uso del presupuesto</h2>
               <span class="pill" id="budMonth"></span>
             </div>
+            <p class="hint" id="budSince" style="margin: -6px 0 12px"></p>
             <div class="bars" id="budgetBars"></div>
           </div>
           <div class="card">
             <div class="card-hd"><h2>Definir límite</h2></div>
-            <p class="hint" style="margin: 0 0 14px">
-              Un límite mensual por categoría de gasto. Las barras cambian a ámbar al 80% y a rojo al pasarte.
-            </p>
+            <p class="hint" style="margin: 0 0 14px" id="budFormHint"></p>
             <form id="budgetForm" class="grid-form">
               <label class="f">Categoría<select id="bCat"></select></label>
               <label class="f">Límite mensual<input id="bAmount" type="number" min="1" step="0.01" required placeholder="0.00" /></label>
               <button class="btn" type="submit">Guardar límite</button>
             </form>
+            <div class="bud-copy" id="budCopy" hidden>
+              <p class="hint" id="budCopyHint"></p>
+              <button class="btn sec" id="btnBudCopy">
+                <svg class="ic"><use href="#i-right" /></svg>Copiar al mes siguiente
+              </button>
+            </div>
           </div>
+        </div>
+        <div class="card">
+          <div class="card-hd">
+            <h2>Historial</h2>
+            <div class="presets" id="budRange" role="group" aria-label="Meses del historial">
+              <button data-n="6">6 meses</button><button data-n="12">12 meses</button>
+            </div>
+          </div>
+          <p class="hint" id="budHistHint" style="margin: -6px 0 12px"></p>
+          <div class="table-scroll"><table class="bud-hist" id="budHist"></table></div>
         </div>
       </section>
 

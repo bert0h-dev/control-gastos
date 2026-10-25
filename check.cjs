@@ -159,6 +159,8 @@ function sample() {
     const api = await (await fetch(url + 'api/state')).json();
     const inDb = api.state?.tx.filter(x => x.desc === 'Prueba automática').length || 0;
     if (inDb !== runs + 1) errors.push(`[${name}] SQLite tiene ${inDb} movimientos de prueba; se esperaban ${runs + 1}`);
+    if (runs === 0 && !api.state?.budgetPlans?.[0]?.limits?.['Alimentación'])
+      errors.push(`[${name}] los límites de presupuesto del navegador no llegaron a SQLite`);
     if (runs === 0 && !(api.state?.tx.length >= 45)) errors.push(`[${name}] no se importaron a SQLite los datos del navegador`);
     await page.reload();
     await page.waitForTimeout(600);
@@ -258,6 +260,43 @@ function sample() {
     await cb.close();
   } catch (e) {
     errors.push(`[dos dispositivos] ${e.message.split('\n')[0]}`);
+  }
+
+  // Presupuestos con historial: cambiar un límite este mes no altera el anterior
+  try {
+    const ctx = await browser.newContext();
+    const p = await ctx.newPage();
+    p.on('pageerror', e => errors.push(`[presupuestos] ${e.message}`));
+    await p.goto(url + '#presupuestos');
+    await p.waitForTimeout(800);
+    const limitOf = async cat =>
+      (await p.locator('#budgetBars .bar-row', { hasText: cat }).locator('.r').textContent()).split('/')[1].trim();
+    const before = await limitOf('Alimentación');
+    await p.locator('#bCat').selectOption('Alimentación');
+    await p.fill('#bAmount', '4321');
+    await p.click('#budgetForm button[type="submit"]');
+    if (!(await limitOf('Alimentación')).includes('4,321')) errors.push('[presupuestos] el límite nuevo no se aplicó este mes');
+    await p.click('#mPrev');
+    if ((await limitOf('Alimentación')) !== before) errors.push('[presupuestos] cambiar el límite alteró el mes anterior');
+    // El mes anterior ahora es distinto al actual: debe ofrecer copiar al mes siguiente
+    if (await p.locator('#budCopy').isHidden()) errors.push('[presupuestos] no se ofrece copiar los límites al mes siguiente');
+    await p.click('#btnBudCopy');
+    await p.click('#mNext');
+    if ((await limitOf('Alimentación')) !== before) errors.push('[presupuestos] copiar al mes siguiente no igualó los límites');
+    const rows = await p.locator('#budHist tbody tr').count();
+    if (rows < 3) errors.push(`[presupuestos] el historial muestra ${rows} categorías; se esperaban al menos 3`);
+    await p.click('#budRange [data-n="12"]');
+    if ((await p.locator('#budHist thead th').count()) !== 14)
+      errors.push('[presupuestos] el historial de 12 meses no muestra 12 columnas');
+    await p.screenshot({ path: path.join(out, 'presupuestos-historial.png'), fullPage: true });
+    await ctx.close();
+  } catch (e) {
+    errors.push(`[presupuestos] ${e.message.split('\n')[0]}`);
+    await browser
+      .contexts()
+      .at(-1)
+      ?.pages()[0]
+      ?.screenshot({ path: path.join(out, 'presupuestos-error.png'), fullPage: true });
   }
 
   // Respaldos: el diario existe, se puede crear uno manual, descargar la base y restaurar

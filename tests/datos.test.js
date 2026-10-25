@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { toCsv, parseCsv, splitCsvLine, sanitizeBackup } from '../src/js/logic/datos.js';
 
-const DEFAULT = { tx: [], budgets: {}, recurring: [], goals: [], cats: { gasto: ['Otros'], ingreso: ['Salario'] }, theme: null };
+const DEFAULT = { tx: [], budgetPlans: [], recurring: [], goals: [], cats: { gasto: ['Otros'], ingreso: ['Salario'] }, theme: null };
 const ids = () => {
   let n = 0;
   return () => ++n;
@@ -77,7 +77,8 @@ describe('respaldo JSON', () => {
       DEFAULT
     );
     expect(d.tx.map(x => x.id)).toEqual([1]);
-    expect(d.budgets).toEqual({ Otros: 500 });
+    // Un respaldo anterior con 'budgets' se convierte en límites vigentes desde siempre
+    expect(d.budgetPlans).toEqual([{ from: '0000-01', limits: { Otros: 500 } }]);
     expect(d.theme).toBeNull();
   });
 
