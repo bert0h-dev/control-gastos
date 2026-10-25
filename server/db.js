@@ -90,6 +90,7 @@ export function readState(db){
     budgets: Object.fromEntries(all('SELECT category, limit_cents FROM budgets ORDER BY position').map(b => [b.category, fromCents(b.limit_cents)])),
     goals: all('SELECT * FROM goals ORDER BY id').map(g => ({ id: g.id, name: g.name, target: fromCents(g.target_cents), saved: fromCents(g.saved_cents), deadline: g.deadline })),
     theme: settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : null,
+    palette: settings.palette || 'esmeralda',
   };
 }
 
@@ -122,6 +123,7 @@ export function writeState(db, s){
     for (const g of s.goals) goal.run(g.id, g.name, toCents(g.target), toCents(g.saved), g.deadline);
     const set = ins('INSERT INTO settings VALUES (?,?)');
     set.run('theme', s.theme ?? null);
+    set.run('palette', s.palette ?? null);
     set.run('saved', new Date().toISOString());
     db.exec('COMMIT');
   } catch (e) {

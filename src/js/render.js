@@ -4,6 +4,7 @@ import { projectMonth } from './logic/analisis.js';
 import { opts, fillCatSelect, fillAccSelect } from './ui.js';
 import { renderAccounts } from './cuentas.js';
 import { renderAnalysis } from './analisis.js';
+import { renderAppearance } from './apariencia.js';
 import { renderSummary } from './resumen.js';
 import { renderTx } from './movimientos.js';
 import { renderBudgets } from './presupuestos.js';
@@ -14,7 +15,7 @@ import { renderCats } from './categorias.js';
 // ===== Render =====
 export function render(){
   fillAccSelect($('fAcc'), 'Todas las cuentas'); fillAccSelect($('rAccount'));
-  renderHeader(); renderSummary(); renderTx(); renderAccounts(); renderAnalysis(); renderBudgets(); renderRecurring(); renderGoals(); renderCats();
+  renderHeader(); renderSummary(); renderTx(); renderAccounts(); renderAnalysis(); renderBudgets(); renderRecurring(); renderGoals(); renderCats(); renderAppearance();
   $('cTx').textContent = inMonth(state.tx, month).length;
   $('cRec').textContent = state.recurring.filter(r => r.active).length;
   $('cGoal').textContent = state.goals.length;

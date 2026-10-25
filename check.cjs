@@ -110,6 +110,28 @@ function sample() {
     if (!(await page.locator('.tx .meta b', { hasText: 'Prueba automática' }).count())) errors.push(`[${name}] tras recargar, el movimiento no está`);
     if (!(await page.textContent('#syncTitle')).includes('Guardado')) errors.push(`[${name}] el indicador no muestra conexión con la base`);
     runs++;
+    // Flujo: cambiar paleta y modo desde Ajustes; captura de cada paleta (solo en escritorio claro)
+    try {
+      await page.click('.tab[data-tab="ajustes"]');
+      const accent = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+      const before = await accent();
+      const target = (await page.getAttribute('.pal.sel', 'data-palette')) === 'oceano' ? 'ciruela' : 'oceano';
+      await page.click(`.pal[data-palette="${target}"]`);
+      if (await accent() === before) errors.push(`[${name}] cambiar de paleta no cambió los colores`);
+      if (name === 'escritorio-claro') {
+        for (const p of ['esmeralda', 'oceano', 'ciruela', 'terracota', 'grafito']) for (const m of ['light', 'dark']) {
+          await page.click(`.pal[data-palette="${p}"]`); await page.click(`[data-mode="${m}"]`);
+          await page.click('.tab[data-tab="resumen"]'); await page.waitForTimeout(150);
+          await page.screenshot({ path: path.join(out, `tema-${p}-${m}.png`) });
+          await page.click('.tab[data-tab="ajustes"]');
+        }
+        await page.screenshot({ path: path.join(out, `${name}-apariencia.png`), fullPage: true });
+        await page.click('[data-mode="system"]'); await page.click('.pal[data-palette="esmeralda"]');
+      }
+      await page.waitForTimeout(500);
+      const saved = (await (await fetch(url + 'api/state')).json()).state;
+      if (name !== 'escritorio-claro' && saved.palette !== target) errors.push(`[${name}] la paleta no se guardó en SQLite (${saved.palette})`);
+    } catch (e) { errors.push(`[${name}] falló el cambio de tema: ${e.message.split('\n')[0]}`); }
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
     if (overflow) errors.push(`[${name}] la página tiene scroll horizontal`);
     await ctx.close();

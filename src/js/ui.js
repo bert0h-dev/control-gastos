@@ -1,5 +1,6 @@
 import { KEY, state, $, esc, ic, save, setState } from './core.js';
 import { render } from './render.js';
+import { themeTokens, isDarkMode, paletteById } from './logic/temas.js';
 import { drawChart } from './resumen.js';
 import { drawLine } from './analisis.js';
 
@@ -63,11 +64,21 @@ export function setTab(t){
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (b) setTab(b.dataset.tab); });
 
-// ===== Tema =====
-export const isDark = () => state.theme ? state.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+// ===== Tema: paleta + modo =====
+// state.theme es el modo (null = sistema, 'light', 'dark'); state.palette es la paleta de logic/temas.js
+const systemDark = () => matchMedia('(prefers-color-scheme: dark)').matches;
+export const isDark = () => isDarkMode(state.theme || 'system', systemDark());
 export function applyTheme(){
-  if (state.theme) document.documentElement.dataset.theme = state.theme; else delete document.documentElement.dataset.theme;
-  $('themeIcon').setAttribute('href', isDark() ? '#i-sun' : '#i-moon');
+  const root = document.documentElement, dark = isDark();
+  if (state.theme) root.dataset.theme = state.theme; else delete root.dataset.theme;
+  root.dataset.palette = paletteById(state.palette).id;
+  // Las variables en línea tienen prioridad sobre las de styles.css, que quedan como respaldo
+  for (const [k, v] of Object.entries(themeTokens(state.palette, dark))) root.style.setProperty('--' + k, v);
+  root.style.colorScheme = dark ? 'dark' : 'light';
+  $('themeIcon').setAttribute('href', dark ? '#i-sun' : '#i-moon');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeTokens(state.palette, dark)['hd-bg']);
 }
-$('btnTheme').onclick = () => { state.theme = isDark() ? 'light' : 'dark'; save(); applyTheme(); drawChart(); };
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { applyTheme(); drawChart(); });
+// Redibuja lo que depende de los colores (las gráficas SVG leen los tokens al dibujarse)
+export function refreshTheme(){ applyTheme(); drawChart(); drawLine(); document.dispatchEvent(new CustomEvent('themechange')); }
+$('btnTheme').onclick = () => { state.theme = isDark() ? 'light' : 'dark'; save(); refreshTheme(); };
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', refreshTheme);

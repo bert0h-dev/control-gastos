@@ -1,6 +1,7 @@
 // Exportar e importar: CSV y validación de respaldos JSON
 import { round2 } from './calculos.js';
 import { KINDS } from './cuentas.js';
+import { PALETTES } from './temas.js';
 
 export const CSV_HEADER = ['Fecha','Tipo','Descripción','Categoría','Subcategoría','Cuenta','Cuenta destino','Monto','Etiquetas','Notas'];
 const cell = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
@@ -93,5 +94,6 @@ export function sanitizeBackup(d, defaults){
   if (Array.isArray(d.recurring)) out.recurring = d.recurring.filter(r => r && num(r.amount) > 0 && MONTH.test(r.start) && r.day >= 1 && r.day <= 31);
   if (Array.isArray(d.goals)) out.goals = d.goals.filter(g => g && num(g.target) > 0 && MONTH.test(g.deadline)).map(g => ({ ...g, saved: num(g.saved) ?? 0 }));
   if (d.theme === 'light' || d.theme === 'dark') out.theme = d.theme;
+  if (PALETTES.some(p => p.id === d.palette)) out.palette = d.palette;
   return out;
 }

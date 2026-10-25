@@ -113,6 +113,22 @@ Funciones puras: reciben datos y devuelven resultados. Nunca modifican el DOM ni
 ### `logic/estado.js`
 `DEFAULT`, el estado inicial de la app. Está en `logic/` para que también lo use el servidor.
 
+### `logic/temas.js`
+Paletas de color del sistema de temas. No depende de nada.
+
+| Función o constante | Qué hace |
+|---|---|
+| `PALETTES` | Lista de paletas (`id`, `name`, `desc`, `light`, `dark`). Cada modo define todos los `TOKENS` |
+| `TOKENS` | Variables CSS que una paleta debe definir: fondos, texto, bordes, acento, dorado y cabecera |
+| `MODES` | `system`, `light`, `dark` |
+| `themeTokens(id, oscuro)` | Tokens de una paleta en el modo indicado |
+| `isDarkMode(modo, sistemaOscuro)` | Resuelve si se ve oscuro |
+| `contrast(a, b)` | Contraste WCAG entre dos colores. Las pruebas lo usan para que ninguna paleta quede ilegible |
+
+**Cómo funciona:** `applyTheme()` (`ui.js`) pone los tokens de la paleta como variables en línea del `<html>`, que tienen prioridad sobre las de `styles.css` (esas quedan como respaldo). Los colores de significado (`--pos`, `--neg`, `--warn`) no cambian entre paletas.
+
+**Para agregar una paleta:** añade un objeto a `PALETTES` con sus valores `light` y `dark`, y corre `npm test`. La prueba verifica que estén todos los tokens y que el contraste sea suficiente.
+
 ### `logic/fechas.js`
 Operaciones con fechas en texto. No depende de nada.
 
@@ -246,7 +262,8 @@ Fuera de `start()` registra `resize` (para redibujar las gráficas) y `hashchang
 | `opts`, `fillCatSelect`, `fillAccSelect` | Llenar `<select>` de categorías y cuentas conservando la opción elegida |
 | `closable(modal)` | Cierra un modal al hacer clic fuera o en `[data-close]` |
 | `setTab(t)` | Cambia de pestaña, actualiza el `#hash` y redibuja la gráfica de esa pestaña |
-| `applyTheme`, `isDark` | Tema claro u oscuro |
+| `applyTheme`, `isDark` | Aplica la paleta (`state.palette`) y el modo (`state.theme`: `null` = sistema) |
+| `refreshTheme()` | `applyTheme` + redibuja las gráficas + emite el evento `themechange`. Úsalo al cambiar de tema |
 
 ### `render.js`: orquestador
 **Deber ser:** coordinar el redibujado. No debe pintar secciones propias salvo la cabecera.
@@ -287,6 +304,7 @@ window.accion = id => { ... };             // funciones que usa el HTML generado
 | `recurrentes.js` | Recurrentes | Lista ordenada por día y neto mensual | Programar, pausar o reanudar y eliminar. Exporta `runRecurring()`, que usa `main.js` |
 | `metas.js` | Metas | Tarjetas con anillo de progreso | Crear, abonar, retirar y eliminar |
 | `categorias.js` | Ajustes › Categorías | Chips de categorías | Añadir y eliminar |
+| `apariencia.js` | Ajustes › Apariencia | Selector de modo y tarjetas de paletas con vista previa | Cambiar modo y paleta. Escucha `themechange` para actualizar las miniaturas |
 | `datos.js` | Ajustes › Tus datos y botón CSV | — | Exportar CSV y JSON, importar (con validación) y borrar todo |
 
 ### Funciones globales `window.*`
@@ -333,7 +351,8 @@ Los formularios de recurrentes y metas sirven para crear y para editar: `editRec
   goals: [{ id, name, target, saved, deadline: 'YYYY-MM' }],
   cats: { gasto: [...], ingreso: [...] },
   subcats: { 'Alimentación': ['Súper', 'Restaurantes'] },
-  theme: null | 'light' | 'dark'
+  theme: null | 'light' | 'dark',   // modo; null = seguir al sistema
+  palette: 'esmeralda'              // id de logic/temas.js
 }
 ```
 
