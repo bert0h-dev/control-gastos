@@ -114,33 +114,27 @@ export function readState(db) {
   };
 }
 
-// Reemplaza todo el contenido dentro de una transacción: o se guarda completo o no se guarda nada
-export function writeState(db, s) {
-  db.exec('BEGIN');
-  try {
-    for (const t of TABLES) db.exec(`DELETE FROM ${t}`);
-    const ins = sql => db.prepare(sql);
-    const acc = ins('INSERT INTO accounts VALUES (?,?,?,?,?,?,?,?)');
-    s.accounts.forEach((a, i) =>
-      acc.run(
-        a.id,
-        i,
-        a.name,
-        a.kind,
-        toCents(a.initial),
-        a.kind === 'credito' ? toCents(a.limit) : null,
-        a.cutDay ?? null,
-        a.payDay ?? null
-      )
-    );
-    const cat = ins('INSERT OR IGNORE INTO categories VALUES (?,?,?)');
-    for (const type of ['gasto', 'ingreso']) s.cats[type].forEach((n, i) => cat.run(n, type, i));
-    const sub = ins('INSERT OR IGNORE INTO subcategories VALUES (?,?,?)');
-    for (const [c, list] of Object.entries(s.subcats || {})) list.forEach((n, i) => sub.run(c, n, i));
-    const tx = ins('INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
-    const tag = ins('INSERT OR IGNORE INTO transaction_tags VALUES (?,?,?)');
-    for (const x of s.tx) {
-      tx.run(
+// Escritores por entidad. INSERT OR REPLACE sirve tanto para altas como para ediciones
+function writers(db) {
+  const q = sql => db.prepare(sql);
+  const s = {
+    tx: q('INSERT OR REPLACE INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'),
+    delTags: q('DELETE FROM transaction_tags WHERE tx_id = ?'),
+    tag: q('INSERT OR IGNORE INTO transaction_tags VALUES (?,?,?)'),
+    delTx: q('DELETE FROM transactions WHERE id = ?'),
+    rec: q('INSERT OR REPLACE INTO recurring VALUES (?,?,?,?,?,?,?,?,?,?,?)'),
+    delRec: q('DELETE FROM recurring WHERE id = ?'),
+    goal: q('INSERT OR REPLACE INTO goals VALUES (?,?,?,?,?)'),
+    delGoal: q('DELETE FROM goals WHERE id = ?'),
+    acc: q('INSERT INTO accounts VALUES (?,?,?,?,?,?,?,?)'),
+    cat: q('INSERT OR IGNORE INTO categories VALUES (?,?,?)'),
+    sub: q('INSERT OR IGNORE INTO subcategories VALUES (?,?,?)'),
+    bud: q('INSERT INTO budgets VALUES (?,?,?)'),
+    set: q('INSERT OR REPLACE INTO settings VALUES (?,?)'),
+  };
+  return {
+    tx(x) {
+      s.tx.run(
         x.id,
         x.type,
         x.date,
@@ -154,11 +148,15 @@ export function writeState(db, s) {
         x.method ?? null,
         x.recId ?? null
       );
-      (x.tags || []).forEach((t, i) => tag.run(x.id, t, i));
-    }
-    const rec = ins('INSERT INTO recurring VALUES (?,?,?,?,?,?,?,?,?,?,?)');
-    for (const r of s.recurring)
-      rec.run(
+      s.delTags.run(x.id);
+      (x.tags || []).forEach((t, i) => s.tag.run(x.id, t, i));
+    },
+    delTx(id) {
+      s.delTags.run(id);
+      s.delTx.run(id);
+    },
+    recurring: r =>
+      s.rec.run(
         r.id,
         r.type,
         r.desc,
@@ -170,20 +168,97 @@ export function writeState(db, s) {
         r.start,
         r.lastGen ?? null,
         r.active ? 1 : 0
+      ),
+    delRecurring: id => s.delRec.run(id),
+    goals: g => s.goal.run(g.id, g.name, toCents(g.target), toCents(g.saved), g.deadline),
+    delGoals: id => s.delGoal.run(id),
+    // Los bloques se reemplazan completos
+    accounts(list) {
+      db.exec('DELETE FROM accounts');
+      list.forEach((a, i) =>
+        s.acc.run(
+          a.id,
+          i,
+          a.name,
+          a.kind,
+          toCents(a.initial),
+          a.kind === 'credito' ? toCents(a.limit) : null,
+          a.cutDay ?? null,
+          a.payDay ?? null
+        )
       );
-    const bud = ins('INSERT INTO budgets VALUES (?,?,?)');
-    Object.entries(s.budgets).forEach(([c, v], i) => bud.run(c, i, toCents(v)));
-    const goal = ins('INSERT INTO goals VALUES (?,?,?,?,?)');
-    for (const g of s.goals) goal.run(g.id, g.name, toCents(g.target), toCents(g.saved), g.deadline);
-    const set = ins('INSERT INTO settings VALUES (?,?)');
-    set.run('theme', s.theme ?? null);
-    set.run('palette', s.palette ?? null);
-    set.run('saved', new Date().toISOString());
+    },
+    cats(c) {
+      db.exec('DELETE FROM categories');
+      for (const type of ['gasto', 'ingreso']) c[type].forEach((n, i) => s.cat.run(n, type, i));
+    },
+    subcats(sc) {
+      db.exec('DELETE FROM subcategories');
+      for (const [c, list] of Object.entries(sc || {})) list.forEach((n, i) => s.sub.run(c, n, i));
+    },
+    budgets(b) {
+      db.exec('DELETE FROM budgets');
+      Object.entries(b).forEach(([c, v], i) => s.bud.run(c, i, toCents(v)));
+    },
+    settings(st) {
+      s.set.run('theme', st.theme ?? null);
+      s.set.run('palette', st.palette ?? null);
+    },
+    // Cada escritura sube la versión: así los demás dispositivos saben que hay algo nuevo
+    bump() {
+      const v = getVersion(db) + 1;
+      s.set.run('version', String(v));
+      s.set.run('saved', new Date().toISOString());
+      return v;
+    },
+  };
+}
+
+function inTransaction(db, fn) {
+  db.exec('BEGIN');
+  try {
+    const r = fn();
     db.exec('COMMIT');
+    return r;
   } catch (e) {
     db.exec('ROLLBACK');
     throw e;
   }
 }
 
+export const getVersion = db => Number(db.prepare("SELECT value FROM settings WHERE key = 'version'").get()?.value ?? 0);
 export const lastSaved = db => db.prepare("SELECT value FROM settings WHERE key = 'saved'").get()?.value ?? null;
+
+// Reemplaza todo el contenido (importación inicial o restaurar respaldo). Devuelve la nueva versión
+export function writeState(db, s) {
+  return inTransaction(db, () => {
+    const version = getVersion(db);
+    for (const t of TABLES) db.exec(`DELETE FROM ${t}`);
+    const w = writers(db);
+    db.prepare("INSERT INTO settings VALUES ('version', ?)").run(String(version));
+    w.accounts(s.accounts);
+    w.cats(s.cats);
+    w.subcats(s.subcats);
+    w.budgets(s.budgets);
+    w.settings(s);
+    s.tx.forEach(w.tx);
+    s.recurring.forEach(w.recurring);
+    s.goals.forEach(w.goals);
+    return w.bump();
+  });
+}
+
+// Aplica solo lo que cambió (ver src/js/logic/sync.js). Todo o nada. Devuelve la nueva versión
+export function applyDelta(db, c) {
+  return inTransaction(db, () => {
+    const w = writers(db);
+    for (const id of c.tx?.delete || []) w.delTx(id);
+    for (const x of c.tx?.upsert || []) w.tx(x);
+    for (const id of c.recurring?.delete || []) w.delRecurring(id);
+    for (const r of c.recurring?.upsert || []) w.recurring(r);
+    for (const id of c.goals?.delete || []) w.delGoals(id);
+    for (const g of c.goals?.upsert || []) w.goals(g);
+    for (const k of ['accounts', 'cats', 'subcats', 'budgets', 'settings']) if (c[k]) w[k](c[k]);
+    return w.bump();
+  });
+}

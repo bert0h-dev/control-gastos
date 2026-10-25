@@ -113,71 +113,112 @@ export function parseCsv(text, newId, accountId = () => undefined) {
   return { tx, skipped };
 }
 
-// Limpia un respaldo JSON: descarta lo que no tenga la forma esperada en lugar de confiar en el archivo
+// ===== Validación =====
+// Nunca se confía en lo que llega (un respaldo, otro dispositivo): cada dato se reconstruye campo por campo
+// y lo que no tiene la forma esperada se descarta. Lo usan la importación y el servidor.
+const num = v => (typeof v === 'number' && isFinite(v) && v >= 0 ? round2(v) : null);
+const strList = (v, fb) => (Array.isArray(v) ? [...new Set(v.map(x => str(x, 30)).filter(Boolean))] : fb);
+const day = v => Math.min(31, Math.max(1, v | 0 || 1));
+const safeId = v => (Number.isSafeInteger(v) ? v : null);
+
+export function sanitizeAccounts(list) {
+  if (!Array.isArray(list)) return null;
+  return list
+    .filter(a => a && str(a.id, 40) && str(a.name, 40) && KINDS[a.kind])
+    .map(a => ({
+      id: str(a.id, 40),
+      name: str(a.name, 40),
+      kind: a.kind,
+      initial: typeof a.initial === 'number' && isFinite(a.initial) ? round2(a.initial) : 0,
+      ...(a.kind === 'credito' ? { limit: num(a.limit) ?? 0, cutDay: day(a.cutDay), payDay: day(a.payDay) } : {}),
+    }));
+}
+
+// 'accIds' (opcional) limita las cuentas válidas; sin él se acepta cualquier id de cuenta con forma válida
+export function sanitizeTx(x, accIds) {
+  if (!x || !DATE.test(x.date) || !(num(x.amount) > 0)) return null;
+  const okAcc = id => typeof id === 'string' && id && (!accIds || accIds.has(id));
+  const type = TYPES.includes(x.type) ? x.type : 'gasto';
+  const t = {
+    id: safeId(x.id),
+    date: x.date,
+    type,
+    desc: str(x.desc, 80) || 'Sin descripción',
+    amount: num(x.amount),
+    note: str(x.note, 140),
+  };
+  if (type !== 'transferencia') t.cat = str(x.cat, 30) || 'Otros';
+  if (x.method) t.method = str(x.method, 30);
+  if (safeId(x.recId)) t.recId = x.recId;
+  if (okAcc(x.account)) t.account = str(x.account, 40);
+  if (type === 'transferencia') {
+    if (!okAcc(x.to) || !t.account || x.to === t.account) return null;
+    t.to = str(x.to, 40);
+  }
+  if (x.sub) t.sub = str(x.sub, 30);
+  if (x.tags) t.tags = tagList(x.tags);
+  return t;
+}
+
+export function sanitizeRecurring(r) {
+  if (!r || !(num(r.amount) > 0) || !MONTH.test(r.start) || !(r.day >= 1 && r.day <= 31) || !safeId(r.id)) return null;
+  return {
+    id: r.id,
+    type: r.type === 'ingreso' ? 'ingreso' : 'gasto',
+    desc: str(r.desc, 80) || 'Sin descripción',
+    amount: num(r.amount),
+    cat: str(r.cat, 30) || 'Otros',
+    account: typeof r.account === 'string' ? str(r.account, 40) : undefined,
+    method: str(r.method, 30),
+    day: r.day | 0,
+    start: r.start,
+    lastGen: MONTH.test(r.lastGen) ? r.lastGen : null,
+    active: r.active !== false,
+  };
+}
+
+export function sanitizeGoal(g) {
+  if (!g || !(num(g.target) > 0) || !MONTH.test(g.deadline) || !safeId(g.id)) return null;
+  return { id: g.id, name: str(g.name, 40) || 'Meta', target: num(g.target), saved: num(g.saved) ?? 0, deadline: g.deadline };
+}
+
+export function sanitizeCats(c, fb) {
+  if (!c || typeof c !== 'object') return null;
+  return { gasto: strList(c.gasto, fb.gasto), ingreso: strList(c.ingreso, fb.ingreso) };
+}
+export const sanitizeSubcats = s =>
+  s && typeof s === 'object' ? Object.fromEntries(Object.entries(s).map(([k, v]) => [str(k, 30), strList(v, [])])) : null;
+export const sanitizeBudgets = b =>
+  b && typeof b === 'object'
+    ? Object.fromEntries(
+        Object.entries(b)
+          .filter(([, v]) => num(v) > 0)
+          .map(([k, v]) => [str(k, 30), num(v)])
+      )
+    : null;
+export function sanitizeSettings(s) {
+  if (!s || typeof s !== 'object') return null;
+  return {
+    theme: s.theme === 'light' || s.theme === 'dark' ? s.theme : null,
+    palette: PALETTES.some(p => p.id === s.palette) ? s.palette : PALETTES[0].id,
+  };
+}
+
+// Limpia un respaldo JSON completo
 export function sanitizeBackup(d, defaults) {
   if (!d || typeof d !== 'object' || !Array.isArray(d.tx)) throw new Error('El archivo no es un respaldo válido');
-  const num = v => (typeof v === 'number' && isFinite(v) && v >= 0 ? round2(v) : null);
-  const strList = (v, fb) => (Array.isArray(v) ? [...new Set(v.map(x => str(x, 30)).filter(Boolean))] : fb);
   const out = structuredClone(defaults);
-
-  if (Array.isArray(d.accounts))
-    out.accounts = d.accounts
-      .filter(a => a && str(a.id, 40) && str(a.name, 40) && KINDS[a.kind])
-      .map(a => ({
-        id: str(a.id, 40),
-        name: str(a.name, 40),
-        kind: a.kind,
-        initial: typeof a.initial === 'number' && isFinite(a.initial) ? round2(a.initial) : 0,
-        ...(a.kind === 'credito'
-          ? {
-              limit: num(a.limit) ?? 0,
-              cutDay: Math.min(31, Math.max(1, a.cutDay | 0 || 1)),
-              payDay: Math.min(31, Math.max(1, a.payDay | 0 || 1)),
-            }
-          : {}),
-      }));
-  const accIds = new Set((out.accounts || []).map(a => a.id));
-
+  out.accounts = sanitizeAccounts(d.accounts) ?? out.accounts;
+  const accIds = Array.isArray(d.accounts) ? new Set(out.accounts.map(a => a.id)) : null;
   out.tx = d.tx
-    .filter(x => x && DATE.test(x.date) && num(x.amount) > 0)
-    .map((x, i) => {
-      const type = TYPES.includes(x.type) ? x.type : 'gasto';
-      const t = {
-        id: Number.isFinite(x.id) ? x.id : Date.now() + i,
-        date: x.date,
-        type,
-        desc: str(x.desc, 80) || 'Sin descripción',
-        amount: num(x.amount),
-        note: str(x.note, 140),
-      };
-      if (type !== 'transferencia') t.cat = str(x.cat, 30) || 'Otros';
-      if (x.method) t.method = str(x.method, 30);
-      if (x.recId) t.recId = x.recId;
-      if (accIds.has(x.account)) t.account = x.account;
-      if (type === 'transferencia') t.to = accIds.has(x.to) ? x.to : null;
-      if (x.sub) t.sub = str(x.sub, 30);
-      if (x.tags) t.tags = tagList(x.tags);
-      return t;
-    })
-    .filter(x => x.type !== 'transferencia' || (x.to && x.account));
-
-  if (d.cats && typeof d.cats === 'object') {
-    out.cats.gasto = strList(d.cats.gasto, out.cats.gasto);
-    out.cats.ingreso = strList(d.cats.ingreso, out.cats.ingreso);
-  }
-  if (d.subcats && typeof d.subcats === 'object')
-    out.subcats = Object.fromEntries(Object.entries(d.subcats).map(([k, v]) => [str(k, 30), strList(v, [])]));
-  if (d.budgets && typeof d.budgets === 'object')
-    out.budgets = Object.fromEntries(
-      Object.entries(d.budgets)
-        .filter(([, v]) => num(v) > 0)
-        .map(([k, v]) => [str(k, 30), num(v)])
-    );
-  if (Array.isArray(d.recurring))
-    out.recurring = d.recurring.filter(r => r && num(r.amount) > 0 && MONTH.test(r.start) && r.day >= 1 && r.day <= 31);
-  if (Array.isArray(d.goals))
-    out.goals = d.goals.filter(g => g && num(g.target) > 0 && MONTH.test(g.deadline)).map(g => ({ ...g, saved: num(g.saved) ?? 0 }));
-  if (d.theme === 'light' || d.theme === 'dark') out.theme = d.theme;
-  if (PALETTES.some(p => p.id === d.palette)) out.palette = d.palette;
+    .map(x => sanitizeTx(x, accIds))
+    .filter(Boolean)
+    .map((x, i) => (x.id === null ? { ...x, id: Date.now() + i } : x));
+  out.cats = sanitizeCats(d.cats, out.cats) ?? out.cats;
+  out.subcats = sanitizeSubcats(d.subcats) ?? out.subcats;
+  out.budgets = sanitizeBudgets(d.budgets) ?? out.budgets;
+  if (Array.isArray(d.recurring)) out.recurring = d.recurring.map(sanitizeRecurring).filter(Boolean);
+  if (Array.isArray(d.goals)) out.goals = d.goals.map(sanitizeGoal).filter(Boolean);
+  Object.assign(out, sanitizeSettings({ theme: d.theme, palette: d.palette ?? defaults.palette }));
   return out;
 }

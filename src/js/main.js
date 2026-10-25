@@ -21,6 +21,12 @@ async function start() {
     } catch (e) {}
   setTab(startTab || 'resumen');
   document.addEventListener('sync', renderSync);
+  // Otro dispositivo guardó cambios: se redibuja con lo nuevo (los cambios locales ya se conservaron)
+  document.addEventListener('remotechange', () => {
+    applyTheme();
+    render();
+    toast('Se actualizó con cambios de otro dispositivo', 'repeat');
+  });
   renderSync();
 
   const msgs = {

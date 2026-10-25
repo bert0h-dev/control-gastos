@@ -53,15 +53,20 @@ src/js/
 ### Persistencia
 
 - **La fuente de verdad es la base SQLite** del servidor (`data/gastos.db`). Ver `server/db.js` y `server/api.js`.
+- **Se envía solo lo que cambia** (fase 2). Cada dispositivo recuerda `synced`, el último estado que confirmó con el servidor, y su `version`. Al guardar envía `diffState(synced, state)` a `PATCH /api/changes`. Ver `logic/sync.js`.
 - `init()` (en `core.js`) se llama una vez al arrancar desde `main.js`, **antes** del primer `render()`:
   - Si el servidor tiene datos, los carga.
-  - Si el servidor está vacío y el navegador tiene datos de la versión anterior, **los sube una sola vez** (importación automática).
-  - Si quedaron cambios sin enviar (marca `controlGastos.v1.pendiente`), los reenvía.
+  - Si el servidor está vacío, lo inicializa con lo que haya en el navegador (importación automática de la versión anterior) o con el estado por defecto.
+  - Si quedaron cambios sin enviar de la sesión anterior, los reaplica sobre lo actual del servidor (`rebase`) y los envía.
   - Si el servidor no responde, trabaja con la copia local y reintenta cada 10 segundos.
-- `save()` sigue siendo **síncrono** para las vistas: escribe la copia en `localStorage` al instante y programa el envío al servidor 300 ms después, agrupando cambios seguidos. Al cerrar la pestaña, lo pendiente se envía con `sendBeacon`.
-- `sync` (en `core.js`) indica si hay conexión y cuándo fue el último guardado. Cada cambio emite el evento `sync` en `document`, y `renderSync()` (`datos.js`) lo muestra en Ajustes.
-- El servidor **valida todo** lo que recibe con `sanitizeBackup()` y `migrate()`, y guarda dentro de una transacción: o se guarda completo o no se guarda nada.
-- Fase 1: se envía el estado completo en cada guardado y gana el último en guardar. Con un solo usuario es suficiente; ver `docs/analisis-sqlite.md` para las siguientes fases.
+- `save()` sigue siendo **síncrono** para las vistas: escribe la copia en `localStorage` al instante y programa el envío 300 ms después, agrupando cambios seguidos. Nunca hay dos envíos a la vez. Al cerrar la pestaña, lo pendiente se envía con `sendBeacon`.
+- **Varios dispositivos:** cada escritura sube la versión de la base. Si al guardar la versión salta más de uno, o si la revisión periódica (cada 15 segundos y al volver a la pestaña, con `GET /api/version`) encuentra una más nueva, el dispositivo trae el estado y **reaplica encima sus cambios sin enviar**. Después emite `remotechange`, y `main.js` redibuja la pantalla.
+  - Cambios en elementos distintos (dos gastos nuevos, uno editado aquí y otro allá) se conservan todos.
+  - Si dos dispositivos editan **el mismo** movimiento, gana el último en guardar.
+  - Los bloques pequeños (cuentas, categorías, subcategorías, presupuestos y ajustes) se envían completos cuando cambian; ahí también gana el último.
+- `sync` (en `core.js`) indica si hay conexión, la versión y cuándo fue el último guardado. Cada cambio emite el evento `sync`, y `renderSync()` (`datos.js`) lo muestra en Ajustes.
+- El servidor **valida todo** lo que recibe con los validadores de `logic/datos.js` (`sanitizeTx`, `sanitizeAccounts`, etc.) y aplica cada paquete dentro de una transacción: o se guarda completo o no se guarda nada.
+- `PUT /api/state` (reemplazar todo) solo se usa para inicializar una base vacía o reenviar cambios de la fase 1.
 
 Toda acción del usuario sigue el mismo ciclo:
 
@@ -111,6 +116,17 @@ Por las importaciones circulares, cuando una vista se evalúa puede que otra vis
 ## Capa de lógica (`logic/`)
 
 Funciones puras: reciben datos y devuelven resultados. Nunca modifican el DOM ni leen el estado global. Las fechas viajan como texto: `'YYYY-MM'` (mes) y `'YYYY-MM-DD'` (día), siempre en hora local. Los montos son números con dos decimales y las sumas se hacen en centavos para evitar errores como `0.1 + 0.2 = 0.30000000000000004`.
+
+### `logic/sync.js`
+
+Sincronización por cambios. No depende de nada.
+
+| Función                          | Qué hace                                                                                                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `diffState(base, next)`          | Cambios para pasar de `base` a `next`. Movimientos, recurrentes y metas van por id (`{ upsert, delete }`); cuentas, categorías, subcategorías, presupuestos y ajustes van completos si cambiaron |
+| `applyChanges(state, cambios)`   | Aplica cambios y devuelve un estado nuevo (no modifica el original)                                                                                                                              |
+| `rebase(servidor, base, local)`  | Reaplica sobre el estado del servidor lo que hiciste localmente desde `base`                                                                                                                     |
+| `isEmptyChanges`, `countChanges` | Ayudas para saber si hay algo que enviar                                                                                                                                                         |
 
 ### `logic/estado.js`
 

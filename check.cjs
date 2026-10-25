@@ -197,6 +197,45 @@ function sample() {
     if (overflow) errors.push(`[${name}] la página tiene scroll horizontal`);
     await ctx.close();
   }
+  // Dos dispositivos a la vez: cada contexto es un navegador independiente (su propio localStorage)
+  try {
+    const [ca, cb] = [await browser.newContext(), await browser.newContext()];
+    const [a, b] = [await ca.newPage(), await cb.newPage()];
+    const puts = [];
+    for (const p of [a, b]) {
+      p.on('pageerror', e => errors.push(`[dos dispositivos] ${e.message}`));
+      p.on('request', r => r.url().includes('/api/state') && r.method() === 'PUT' && puts.push(r.url()));
+    }
+    await Promise.all([a.goto(url + '#movimientos'), b.goto(url + '#movimientos')]);
+    await a.waitForTimeout(600);
+    const add = async (p, desc) => {
+      await p.click('#btnNew');
+      await p.fill('#txAmount', '10');
+      await p.fill('#txDesc', desc);
+      await p.click('#btnSave');
+    };
+    // Los dos registran casi al mismo tiempo, sin haber visto el cambio del otro
+    await Promise.all([add(a, 'Desde dispositivo A'), add(b, 'Desde dispositivo B')]);
+    await a.waitForTimeout(1200);
+    const db = (await (await fetch(url + 'api/state')).json()).state.tx.map(x => x.desc);
+    for (const d of ['Desde dispositivo A', 'Desde dispositivo B'])
+      if (!db.includes(d)) errors.push(`[dos dispositivos] SQLite perdió "${d}"`);
+    // Cada uno revisa si hay cambios (normalmente cada 15 s o al volver a la pestaña) y debe ver lo del otro
+    for (const p of [a, b]) await p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await a.waitForTimeout(1200);
+    for (const [p, other] of [
+      [a, 'Desde dispositivo B'],
+      [b, 'Desde dispositivo A'],
+    ])
+      if (!(await p.locator('.tx .meta b', { hasText: other }).count())) errors.push(`[dos dispositivos] no se ve "${other}" en el otro`);
+    if (puts.length) errors.push(`[dos dispositivos] se envió el estado completo ${puts.length} vez/veces en lugar de solo cambios`);
+    await a.screenshot({ path: path.join(out, 'dos-dispositivos-a.png'), fullPage: true });
+    await ca.close();
+    await cb.close();
+  } catch (e) {
+    errors.push(`[dos dispositivos] ${e.message.split('\n')[0]}`);
+  }
+
   await browser.close();
   await server.close();
   for (const f of [dbFile, dbFile + '-wal', dbFile + '-shm'])
