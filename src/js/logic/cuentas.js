@@ -19,39 +19,42 @@ const accountForMethod = (method, accounts) => {
 };
 
 // Completa datos guardados con versiones anteriores sin perder nada
-export function migrate(state){
+export function migrate(state) {
   if (!Array.isArray(state.accounts) || !state.accounts.length) state.accounts = structuredClone(DEFAULT_ACCOUNTS);
   const ids = new Set(state.accounts.map(a => a.id));
-  for (const list of [state.tx, state.recurring]) for (const x of list || [])
-    if (!ids.has(x.account)) x.account = accountForMethod(x.method, state.accounts);
+  for (const list of [state.tx, state.recurring])
+    for (const x of list || []) if (!ids.has(x.account)) x.account = accountForMethod(x.method, state.accounts);
   if (!state.subcats || typeof state.subcats !== 'object') state.subcats = {};
   return state;
 }
 
 // Efecto de un movimiento sobre una cuenta (positivo entra, negativo sale)
-export function effectOn(x, accountId){
+export function effectOn(x, accountId) {
   if (x.type === 'transferencia') return (x.to === accountId ? x.amount : 0) - (x.account === accountId ? x.amount : 0);
   if (x.account !== accountId) return 0;
   return x.type === 'ingreso' ? x.amount : -x.amount;
 }
 
 // Saldo de la cuenta con todos los movimientos hasta 'until' (incluido). En crédito, negativo = deuda
-export function balanceOf(account, tx, until = '9999-12-31'){
-  const cents = tx.filter(x => x.date <= until).reduce((s, x) => s + Math.round(effectOn(x, account.id)*100), 0);
-  return round2(account.initial + cents/100);
+export function balanceOf(account, tx, until = '9999-12-31') {
+  const cents = tx.filter(x => x.date <= until).reduce((s, x) => s + Math.round(effectOn(x, account.id) * 100), 0);
+  return round2(account.initial + cents / 100);
 }
 
 export const daysBetween = (a, b) => Math.round((Date.UTC(...ymdParts(b)) - Date.UTC(...ymdParts(a))) / 864e5);
-const ymdParts = s => { const [y, m, d] = s.split('-').map(Number); return [y, m-1, d]; };
+const ymdParts = s => {
+  const [y, m, d] = s.split('-').map(Number);
+  return [y, m - 1, d];
+};
 
 // Estado de cuenta de una tarjeta a la fecha 'todayStr'
-export function cardStatement(card, tx, todayStr){
-  const m = todayStr.slice(0,7);
+export function cardStatement(card, tx, todayStr) {
+  const m = todayStr.slice(0, 7);
   const cutThis = clampDay(m, card.cutDay);
   const lastCut = todayStr >= cutThis ? cutThis : clampDay(addMonths(m, -1), card.cutDay);
-  const nextCut = clampDay(addMonths(lastCut.slice(0,7), 1), card.cutDay);
-  let due = clampDay(lastCut.slice(0,7), card.payDay);
-  if (due <= lastCut) due = clampDay(addMonths(lastCut.slice(0,7), 1), card.payDay);
+  const nextCut = clampDay(addMonths(lastCut.slice(0, 7), 1), card.cutDay);
+  let due = clampDay(lastCut.slice(0, 7), card.payDay);
+  if (due <= lastCut) due = clampDay(addMonths(lastCut.slice(0, 7), 1), card.payDay);
 
   const debt = Math.max(0, -balanceOf(card, tx, todayStr));
   const statement = Math.max(0, -balanceOf(card, tx, lastCut));
@@ -61,8 +64,17 @@ export function cardStatement(card, tx, todayStr){
   const toPay = Math.max(0, round2(statement - payments));
   const daysToDue = daysBetween(todayStr, due);
   return {
-    debt, available: round2((card.limit || 0) - debt), usedPct: card.limit ? Math.round(debt/card.limit*100) : null,
-    lastCut, nextCut, due, daysToDue, statement, payments: round2(payments), charges: round2(charges), toPay,
+    debt,
+    available: round2((card.limit || 0) - debt),
+    usedPct: card.limit ? Math.round((debt / card.limit) * 100) : null,
+    lastCut,
+    nextCut,
+    due,
+    daysToDue,
+    statement,
+    payments: round2(payments),
+    charges: round2(charges),
+    toPay,
     level: toPay > 0 && daysToDue < 0 ? 'overdue' : toPay > 0 && daysToDue <= 5 ? 'soon' : toPay > 0 ? 'pending' : 'ok',
   };
 }

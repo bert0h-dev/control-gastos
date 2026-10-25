@@ -15,24 +15,35 @@ const send = (res, status, data) => {
   res.end(JSON.stringify(data));
 };
 
-function readBody(req){
+function readBody(req) {
   return new Promise((ok, fail) => {
-    let size = 0; const chunks = [];
-    req.on('data', c => { size += c.length; if (size > MAX_BODY) { fail(Object.assign(new Error('Datos demasiado grandes'), { status: 413 })); req.destroy(); } else chunks.push(c); });
+    let size = 0;
+    const chunks = [];
+    req.on('data', c => {
+      size += c.length;
+      if (size > MAX_BODY) {
+        fail(Object.assign(new Error('Datos demasiado grandes'), { status: 413 }));
+        req.destroy();
+      } else chunks.push(c);
+    });
     req.on('end', () => ok(Buffer.concat(chunks).toString('utf8')));
     req.on('error', fail);
   });
 }
 
 // Datos antiguos pueden traer ids repetidos; en SQLite romperían la llave primaria, así que se reasignan
-export function ensureUniqueIds(list){
-  const seen = new Set(); let next = Math.max(0, ...list.map(x => Number.isSafeInteger(x.id) ? x.id : 0)) + 1;
-  for (const x of list) { if (!Number.isSafeInteger(x.id) || seen.has(x.id)) x.id = next++; seen.add(x.id); }
+export function ensureUniqueIds(list) {
+  const seen = new Set();
+  let next = Math.max(0, ...list.map(x => (Number.isSafeInteger(x.id) ? x.id : 0))) + 1;
+  for (const x of list) {
+    if (!Number.isSafeInteger(x.id) || seen.has(x.id)) x.id = next++;
+    seen.add(x.id);
+  }
   return list;
 }
 
 // La base se abre en la primera petición, no al importar el módulo (Vitest también carga la config de Vite)
-export function apiMiddleware(path = DB_PATH){
+export function apiMiddleware(path = DB_PATH) {
   let db;
   const getDb = () => (db ||= openDb(path));
   return async (req, res, next) => {
@@ -40,7 +51,8 @@ export function apiMiddleware(path = DB_PATH){
     if (!url.startsWith('/api/')) return next();
     try {
       if (url === '/api/state' && req.method === 'GET') {
-        const d = getDb(), empty = isEmpty(d);
+        const d = getDb(),
+          empty = isEmpty(d);
         return send(res, 200, { empty, state: empty ? null : readState(d), saved: lastSaved(d) });
       }
       // PUT guarda; POST existe para navigator.sendBeacon al cerrar la página

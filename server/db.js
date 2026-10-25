@@ -38,12 +38,12 @@ CREATE TABLE IF NOT EXISTS budgets (category TEXT PRIMARY KEY, position INTEGER 
 CREATE TABLE IF NOT EXISTS goals (id INTEGER PRIMARY KEY, name TEXT NOT NULL, target_cents INTEGER NOT NULL, saved_cents INTEGER NOT NULL DEFAULT 0, deadline TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 `;
-const TABLES = ['accounts','categories','subcategories','transactions','transaction_tags','recurring','budgets','goals','settings'];
+const TABLES = ['accounts', 'categories', 'subcategories', 'transactions', 'transaction_tags', 'recurring', 'budgets', 'goals', 'settings'];
 
 const toCents = n => Math.round((n || 0) * 100);
 const fromCents = c => c / 100;
 
-export function openDb(path){
+export function openDb(path) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   db.exec('PRAGMA journal_mode = WAL;'); // escrituras seguras ante cortes
@@ -54,7 +54,7 @@ export function openDb(path){
 // La base está vacía si nunca se guardó nada (la marca 'saved' se escribe en cada guardado)
 export const isEmpty = db => !db.prepare("SELECT 1 FROM settings WHERE key = 'saved'").get();
 
-export function readState(db){
+export function readState(db) {
   const all = sql => db.prepare(sql).all();
   const tags = {};
   for (const t of all('SELECT tx_id, tag FROM transaction_tags ORDER BY tx_id, position')) (tags[t.tx_id] ||= []).push(t.tag);
@@ -64,7 +64,10 @@ export function readState(db){
 
   return {
     accounts: all('SELECT * FROM accounts ORDER BY position').map(a => ({
-      id: a.id, name: a.name, kind: a.kind, initial: fromCents(a.initial_cents),
+      id: a.id,
+      name: a.name,
+      kind: a.kind,
+      initial: fromCents(a.initial_cents),
       ...(a.kind === 'credito' ? { limit: fromCents(a.limit_cents ?? 0), cutDay: a.cut_day, payDay: a.pay_day } : {}),
     })),
     cats: {
@@ -84,25 +87,52 @@ export function readState(db){
       return x;
     }),
     recurring: all('SELECT * FROM recurring ORDER BY id').map(r => ({
-      id: r.id, type: r.type, desc: r.description, amount: fromCents(r.amount_cents), cat: r.category, account: r.account_id,
-      method: r.method || '', day: r.day, start: r.start, lastGen: r.last_gen, active: !!r.active,
+      id: r.id,
+      type: r.type,
+      desc: r.description,
+      amount: fromCents(r.amount_cents),
+      cat: r.category,
+      account: r.account_id,
+      method: r.method || '',
+      day: r.day,
+      start: r.start,
+      lastGen: r.last_gen,
+      active: !!r.active,
     })),
-    budgets: Object.fromEntries(all('SELECT category, limit_cents FROM budgets ORDER BY position').map(b => [b.category, fromCents(b.limit_cents)])),
-    goals: all('SELECT * FROM goals ORDER BY id').map(g => ({ id: g.id, name: g.name, target: fromCents(g.target_cents), saved: fromCents(g.saved_cents), deadline: g.deadline })),
+    budgets: Object.fromEntries(
+      all('SELECT category, limit_cents FROM budgets ORDER BY position').map(b => [b.category, fromCents(b.limit_cents)])
+    ),
+    goals: all('SELECT * FROM goals ORDER BY id').map(g => ({
+      id: g.id,
+      name: g.name,
+      target: fromCents(g.target_cents),
+      saved: fromCents(g.saved_cents),
+      deadline: g.deadline,
+    })),
     theme: settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : null,
     palette: settings.palette || 'esmeralda',
   };
 }
 
 // Reemplaza todo el contenido dentro de una transacción: o se guarda completo o no se guarda nada
-export function writeState(db, s){
+export function writeState(db, s) {
   db.exec('BEGIN');
   try {
     for (const t of TABLES) db.exec(`DELETE FROM ${t}`);
-    const ins = (sql) => db.prepare(sql);
+    const ins = sql => db.prepare(sql);
     const acc = ins('INSERT INTO accounts VALUES (?,?,?,?,?,?,?,?)');
-    s.accounts.forEach((a, i) => acc.run(a.id, i, a.name, a.kind, toCents(a.initial),
-      a.kind === 'credito' ? toCents(a.limit) : null, a.cutDay ?? null, a.payDay ?? null));
+    s.accounts.forEach((a, i) =>
+      acc.run(
+        a.id,
+        i,
+        a.name,
+        a.kind,
+        toCents(a.initial),
+        a.kind === 'credito' ? toCents(a.limit) : null,
+        a.cutDay ?? null,
+        a.payDay ?? null
+      )
+    );
     const cat = ins('INSERT OR IGNORE INTO categories VALUES (?,?,?)');
     for (const type of ['gasto', 'ingreso']) s.cats[type].forEach((n, i) => cat.run(n, type, i));
     const sub = ins('INSERT OR IGNORE INTO subcategories VALUES (?,?,?)');
@@ -110,13 +140,37 @@ export function writeState(db, s){
     const tx = ins('INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
     const tag = ins('INSERT OR IGNORE INTO transaction_tags VALUES (?,?,?)');
     for (const x of s.tx) {
-      tx.run(x.id, x.type, x.date, x.desc, toCents(x.amount), x.account ?? null, x.to ?? null,
-        x.cat ?? null, x.sub ?? null, x.note ?? '', x.method ?? null, x.recId ?? null);
+      tx.run(
+        x.id,
+        x.type,
+        x.date,
+        x.desc,
+        toCents(x.amount),
+        x.account ?? null,
+        x.to ?? null,
+        x.cat ?? null,
+        x.sub ?? null,
+        x.note ?? '',
+        x.method ?? null,
+        x.recId ?? null
+      );
       (x.tags || []).forEach((t, i) => tag.run(x.id, t, i));
     }
     const rec = ins('INSERT INTO recurring VALUES (?,?,?,?,?,?,?,?,?,?,?)');
-    for (const r of s.recurring) rec.run(r.id, r.type, r.desc, toCents(r.amount), r.cat ?? null, r.account ?? null,
-      r.method || null, r.day, r.start, r.lastGen ?? null, r.active ? 1 : 0);
+    for (const r of s.recurring)
+      rec.run(
+        r.id,
+        r.type,
+        r.desc,
+        toCents(r.amount),
+        r.cat ?? null,
+        r.account ?? null,
+        r.method || null,
+        r.day,
+        r.start,
+        r.lastGen ?? null,
+        r.active ? 1 : 0
+      );
     const bud = ins('INSERT INTO budgets VALUES (?,?,?)');
     Object.entries(s.budgets).forEach(([c, v], i) => bud.run(c, i, toCents(v)));
     const goal = ins('INSERT INTO goals VALUES (?,?,?,?,?)');

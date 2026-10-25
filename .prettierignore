@@ -1,0 +1,5 @@
+dist/
+node_modules/
+capturas/
+data/
+package-lock.json

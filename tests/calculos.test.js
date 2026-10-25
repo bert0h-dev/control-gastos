@@ -1,5 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { sum, monthSummary, expensesByCategory, dailyAverage, compareMonths, budgetStatus, goalPlan, filterTx, groupByDay, netOf, niceScale, renameCategory } from '../src/js/logic/calculos.js';
+import {
+  sum,
+  monthSummary,
+  expensesByCategory,
+  dailyAverage,
+  compareMonths,
+  budgetStatus,
+  goalPlan,
+  filterTx,
+  groupByDay,
+  netOf,
+  niceScale,
+  renameCategory,
+} from '../src/js/logic/calculos.js';
 
 let id = 0;
 const t = (date, type, amount, cat = 'Otros', desc = 'x', note = '') => ({ id: ++id, date, type, amount, cat, desc, note });
@@ -63,20 +76,26 @@ describe('comparativo', () => {
 
 describe('presupuestos', () => {
   it('calcula nivel y disponible por categoría', () => {
-    const b = budgetStatus(tx, { 'Alimentación': 4000, 'Entretenimiento': 2000, 'Salud': 400 }, '2026-10');
+    const b = budgetStatus(tx, { Alimentación: 4000, Entretenimiento: 2000, Salud: 400 }, '2026-10');
     expect(b.items.map(i => i.level)).toEqual(['ok', 'over', 'over']);
     expect(b.items[0]).toMatchObject({ spent: 2500, left: 1500 });
     expect(b.items[2].left).toBe(-100);
     expect(b).toMatchObject({ limit: 6400, spent: 5000, pct: 78 });
   });
   it('80% o más es advertencia', () => {
-    expect(budgetStatus(tx, { 'Alimentación': 3100 }, '2026-10').items[0].level).toBe('warn');
+    expect(budgetStatus(tx, { Alimentación: 3100 }, '2026-10').items[0].level).toBe('warn');
   });
 });
 
 describe('metas', () => {
   it('calcula el ahorro mensual necesario', () => {
-    expect(goalPlan({ target: 20000, saved: 8000, deadline: '2027-01' }, '2026-10')).toMatchObject({ left: 12000, months: 4, perMonth: 3000, status: 'active', pct: 40 });
+    expect(goalPlan({ target: 20000, saved: 8000, deadline: '2027-01' }, '2026-10')).toMatchObject({
+      left: 12000,
+      months: 4,
+      perMonth: 3000,
+      status: 'active',
+      pct: 40,
+    });
   });
   it('detecta meta cumplida y vencida', () => {
     expect(goalPlan({ target: 100, saved: 150, deadline: '2026-01' }, '2026-10')).toMatchObject({ status: 'done', pct: 100, left: 0 });
@@ -98,7 +117,9 @@ describe('movimientos', () => {
   it('agrupa por día con el neto de cada día', () => {
     const days = groupByDay(filterTx(tx, { month: '2026-10' }));
     expect(days.map(d => [d.date, d.net, d.items.length])).toEqual([
-      ['2026-10-08', -500, 1], ['2026-10-05', -4500, 2], ['2026-10-01', 20000, 1],
+      ['2026-10-08', -500, 1],
+      ['2026-10-05', -4500, 2],
+      ['2026-10-01', 20000, 1],
     ]);
     expect(netOf(filterTx(tx, { month: '2026-10' }))).toBe(15000);
   });
@@ -108,9 +129,14 @@ describe('renombrar categoría', () => {
   it('actualiza movimientos, recurrentes, presupuesto y subcategorías', () => {
     const s = {
       cats: { gasto: ['Comida', 'Otros'], ingreso: ['Comida'] },
-      tx: [{ type: 'gasto', cat: 'Comida' }, { type: 'gasto', cat: 'Otros' }, { type: 'ingreso', cat: 'Comida' }],
+      tx: [
+        { type: 'gasto', cat: 'Comida' },
+        { type: 'gasto', cat: 'Otros' },
+        { type: 'ingreso', cat: 'Comida' },
+      ],
       recurring: [{ type: 'gasto', cat: 'Comida' }],
-      budgets: { Comida: 3000 }, subcats: { Comida: ['Súper'] },
+      budgets: { Comida: 3000 },
+      subcats: { Comida: ['Súper'] },
     };
     renameCategory(s, 'gasto', 'Comida', 'Alimentación');
     expect(s.cats.gasto).toEqual(['Alimentación', 'Otros']);

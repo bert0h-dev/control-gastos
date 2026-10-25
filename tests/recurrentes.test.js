@@ -1,8 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { generatePending, resume, monthlyNet } from '../src/js/logic/recurrentes.js';
 
-const ids = () => { let n = 0; return () => ++n; };
-const rec = o => ({ id: 1, type: 'gasto', desc: 'Renta', amount: 9500, cat: 'Vivienda', method: 'Transferencia', day: 5, start: '2026-08', lastGen: null, active: true, ...o });
+const ids = () => {
+  let n = 0;
+  return () => ++n;
+};
+const rec = o => ({
+  id: 1,
+  type: 'gasto',
+  desc: 'Renta',
+  amount: 9500,
+  cat: 'Vivienda',
+  method: 'Transferencia',
+  day: 5,
+  start: '2026-08',
+  lastGen: null,
+  active: true,
+  ...o,
+});
 
 describe('recurrentes', () => {
   it('genera todos los meses pendientes desde el inicio', () => {

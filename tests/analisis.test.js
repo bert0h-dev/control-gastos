@@ -7,13 +7,13 @@ const t = (date, type, amount, extra = {}) => ({ id: ++id, date, type, amount, c
 describe('proyección de fin de mes', () => {
   const tx = [
     t('2026-10-01', 'ingreso', 20000, { recId: 1 }),
-    t('2026-10-02', 'gasto', 9000, { recId: 2 }),     // renta (fija)
+    t('2026-10-02', 'gasto', 9000, { recId: 2 }), // renta (fija)
     t('2026-10-05', 'gasto', 1000),
     t('2026-10-09', 'gasto', 1000),
   ];
   const recurring = [
     { id: 2, type: 'gasto', amount: 9000, day: 2, start: '2026-01', lastGen: '2026-10', active: true },
-    { id: 3, type: 'gasto', amount: 300, day: 15, start: '2026-01', lastGen: '2026-09', active: true },  // Netflix pendiente
+    { id: 3, type: 'gasto', amount: 300, day: 15, start: '2026-01', lastGen: '2026-09', active: true }, // Netflix pendiente
     { id: 4, type: 'gasto', amount: 999, day: 20, start: '2026-01', lastGen: '2026-09', active: false }, // pausado
   ];
   it('extrapola el gasto variable y suma los recurrentes que faltan', () => {
@@ -40,13 +40,21 @@ describe('rangos', () => {
   });
   it('desglosa por categoría, subcategoría y etiqueta', () => {
     const r = rangeSummary(tx, '2026-08-01', '2026-10-31');
-    expect(r.byCat).toEqual([{ name: 'Comida', amount: 4000, pct: 67 }, { name: 'Transporte', amount: 2000, pct: 33 }]);
+    expect(r.byCat).toEqual([
+      { name: 'Comida', amount: 4000, pct: 67 },
+      { name: 'Transporte', amount: 2000, pct: 33 },
+    ]);
     expect(r.bySub.map(s => s.name)).toEqual(['Comida › Súper', 'Comida › Restaurantes']);
-    expect(r.byTag).toEqual([{ name: 'viaje', amount: 3000, pct: 50 }, { name: 'trabajo', amount: 2000, pct: 33 }]);
+    expect(r.byTag).toEqual([
+      { name: 'viaje', amount: 3000, pct: 50 },
+      { name: 'trabajo', amount: 2000, pct: 33 },
+    ]);
   });
   it('arma la serie de balance acumulado', () => {
     expect(balanceSeries(tx, '2026-08', '2026-10')).toEqual([
-      { m: '2026-08', net: -1000, acc: -1000 }, { m: '2026-09', net: 6000, acc: 5000 }, { m: '2026-10', net: -2000, acc: 3000 },
+      { m: '2026-08', net: -1000, acc: -1000 },
+      { m: '2026-09', net: 6000, acc: 5000 },
+      { m: '2026-10', net: -2000, acc: 3000 },
     ]);
   });
   it('calcula presets de rango', () => {

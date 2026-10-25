@@ -8,8 +8,14 @@ const t = (date, type, amount, account, extra = {}) => ({ id: ++id, date, type, 
 
 describe('migración', () => {
   it('crea cuentas por defecto y asigna movimientos viejos según su método de pago', () => {
-    const s = migrate({ tx: [t('2026-10-01', 'gasto', 1, undefined, { method: 'Efectivo' }), t('2026-10-01', 'gasto', 1, undefined, { method: 'Tarjeta de crédito' }),
-      t('2026-10-01', 'gasto', 1, undefined, { method: 'Transferencia' })], recurring: [] });
+    const s = migrate({
+      tx: [
+        t('2026-10-01', 'gasto', 1, undefined, { method: 'Efectivo' }),
+        t('2026-10-01', 'gasto', 1, undefined, { method: 'Tarjeta de crédito' }),
+        t('2026-10-01', 'gasto', 1, undefined, { method: 'Transferencia' }),
+      ],
+      recurring: [],
+    });
     expect(s.accounts.map(a => a.id)).toEqual(DEFAULT_ACCOUNTS.map(a => a.id));
     expect(s.tx.map(x => x.account)).toEqual(['efectivo', 'tarjeta', 'banco']);
     expect(s.subcats).toEqual({});
@@ -41,9 +47,9 @@ describe('saldos', () => {
 
 describe('tarjeta de crédito', () => {
   const tx = [
-    t('2026-09-15', 'gasto', 2000, 'tc'),          // periodo anterior
-    t('2026-10-05', 'gasto', 3000, 'tc'),          // entra al corte del 20 de octubre
-    t('2026-10-22', 'gasto', 800, 'tc'),           // después del corte
+    t('2026-09-15', 'gasto', 2000, 'tc'), // periodo anterior
+    t('2026-10-05', 'gasto', 3000, 'tc'), // entra al corte del 20 de octubre
+    t('2026-10-22', 'gasto', 800, 'tc'), // después del corte
   ];
   it('ubica el último corte, el siguiente y la fecha de pago', () => {
     const s = cardStatement(card, tx, '2026-10-25');

@@ -3,8 +3,8 @@ import { PALETTES, TOKENS, themeTokens, isDarkMode, contrast, paletteById } from
 
 describe('temas', () => {
   it('cada paleta define todos los tokens en claro y oscuro', () => {
-    for (const p of PALETTES) for (const mode of ['light', 'dark'])
-      expect(Object.keys(p[mode]).sort(), `${p.id}/${mode}`).toEqual([...TOKENS].sort());
+    for (const p of PALETTES)
+      for (const mode of ['light', 'dark']) expect(Object.keys(p[mode]).sort(), `${p.id}/${mode}`).toEqual([...TOKENS].sort());
   });
 
   // Contraste mínimo WCAG AA: 4.5 para texto normal, 3 para elementos grandes o secundarios

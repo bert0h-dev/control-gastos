@@ -8,14 +8,17 @@ import { runRecurring } from './recurrentes.js';
 import { renderSync } from './datos.js';
 
 // ===== Inicio =====
-async function start(){
-  $('rStart').value = today().slice(0,7);
-  const loaded = await init();          // trae los datos del servidor SQLite
+async function start() {
+  $('rStart').value = today().slice(0, 7);
+  const loaded = await init(); // trae los datos del servidor SQLite
   applyTheme();
   const pending = runRecurring();
   render();
   let startTab = location.hash.slice(1);
-  if (!startTab) try { startTab = localStorage.getItem(KEY + '.tab'); } catch(e){}
+  if (!startTab)
+    try {
+      startTab = localStorage.getItem(KEY + '.tab');
+    } catch (e) {}
   setTab(startTab || 'resumen');
   document.addEventListener('sync', renderSync);
   renderSync();
