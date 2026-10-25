@@ -43,12 +43,19 @@ const TABLES = ['accounts', 'categories', 'subcategories', 'transactions', 'tran
 const toCents = n => Math.round((n || 0) * 100);
 const fromCents = c => c / 100;
 
-export function openDb(path) {
+// readOnly abre una base (p. ej. un respaldo) sin modificarla: no crea tablas ni cambia el modo del diario
+export function openDb(path, { readOnly = false } = {}) {
+  if (readOnly) return new DatabaseSync(path, { readOnly: true });
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   db.exec('PRAGMA journal_mode = WAL;'); // escrituras seguras ante cortes
   db.exec(SCHEMA);
   return db;
+}
+
+// Copia consistente de la base completa en 'file' (funciona aunque haya escrituras en curso)
+export function copyDbTo(db, file) {
+  db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
 }
 
 // La base está vacía si nunca se guardó nada (la marca 'saved' se escribe en cada guardado)

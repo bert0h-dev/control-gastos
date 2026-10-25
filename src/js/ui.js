@@ -77,7 +77,9 @@ export function ask({ title, msg = '', ok = 'Aceptar', danger = false, input = f
     inp.required = !!input;
     inp.type = text ? 'text' : 'number';
     inp.className = text ? '' : 'amount-in';
-    inp.maxLength = text ? 30 : -1;
+    // maxLength no acepta -1 (lanza un error): sin límite se quita el atributo
+    if (text) inp.maxLength = 30;
+    else inp.removeAttribute('maxlength');
     inp.value = value;
     $('dlg').hidden = false;
     (input ? inp : $('dlgOk')).focus();
@@ -116,7 +118,8 @@ export function closable(modal) {
 
 // ===== Tabs =====
 export function setTab(t) {
-  if (!document.querySelector(`[data-panel="${t}"]`)) t = 'resumen';
+  // 't' puede venir del #hash de la URL: se compara contra los paneles existentes, sin armar un selector con él
+  if (![...document.querySelectorAll('[data-panel]')].some(p => p.dataset.panel === t)) t = 'resumen';
   document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
   document.querySelectorAll('[data-panel]').forEach(p => (p.hidden = p.dataset.panel !== t));
   try {
@@ -126,6 +129,7 @@ export function setTab(t) {
   // Las gráficas se dibujan con el ancho real, que solo existe cuando su pestaña está visible
   if (t === 'resumen') drawChart();
   if (t === 'analisis') drawLine();
+  document.dispatchEvent(new CustomEvent('tabchange', { detail: t }));
 }
 $('tabs').addEventListener('click', e => {
   const b = e.target.closest('.tab');

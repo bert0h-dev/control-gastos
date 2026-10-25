@@ -1,6 +1,6 @@
-import { DEFAULT, state, $, today, save, allCats, setState, newId, accName, sync } from './core.js';
+import { DEFAULT, state, $, today, save, allCats, setState, newId, accName, sync, esc, ic } from './core.js';
 import { toCsv, parseCsv, sanitizeBackup } from './logic/datos.js';
-import { toast, ask, applyTheme } from './ui.js';
+import { toast, ask, applyTheme, action } from './ui.js';
 import { render } from './render.js';
 import { filteredTx } from './movimientos.js';
 
@@ -15,6 +15,62 @@ export function renderSync() {
       : 'Aún no hay cambios guardados'
     : 'Los cambios se guardan en este navegador y se enviarán al reconectar. ¿Está corriendo npm run dev o npm start?';
 }
+
+// ===== Respaldos automáticos (los crea el servidor; ver server/respaldos.js) =====
+const KIND = { diario: 'Diario', manual: 'Manual', 'antes-de-restaurar': 'Antes de restaurar' };
+const size = b => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`);
+
+export async function loadBackups() {
+  try {
+    const r = await fetch('/api/backups').then(res => (res.ok ? res.json() : Promise.reject()));
+    const last = r.backups[0];
+    $('bkHint').textContent = last
+      ? `Se conservan los últimos ${r.keep}. Más reciente: ${new Date(last.created).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}`
+      : `Aún no hay respaldos. Se crea uno automático cada día que uses la app (se conservan los últimos ${r.keep}).`;
+    $('bkList').innerHTML = r.backups
+      .slice(0, 8)
+      .map(
+        b => `<div class="bk">
+        <div class="bk-info"><b>${new Date(b.created).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}</b>
+          <span class="hint">${KIND[b.kind] || esc(b.kind)} · ${size(b.size)}</span></div>
+        <a class="iconbtn" href="/api/backups/${encodeURIComponent(b.name)}" download aria-label="Descargar respaldo">${ic('download')}</a>
+        <button class="iconbtn" data-action="restoreBackup" data-name="${esc(b.name)}" data-when="${esc(new Date(b.created).toLocaleString('es-MX'))}" aria-label="Restaurar este respaldo">${ic('repeat')}</button>
+      </div>`
+      )
+      .join('');
+    if (r.backups.length > 8)
+      $('bkList').insertAdjacentHTML('beforeend', `<div class="hint">y ${r.backups.length - 8} más en la carpeta de respaldos</div>`);
+  } catch {
+    $('bkHint').textContent = 'No se pudo consultar los respaldos: el servidor no responde.';
+    $('bkList').innerHTML = '';
+  }
+}
+
+$('btnBackupNow').onclick = async () => {
+  const r = await fetch('/api/backups', { method: 'POST' });
+  if (!r.ok) return toast('No se pudo crear el respaldo', 'alert');
+  toast('Respaldo creado', 'check');
+  loadBackups();
+};
+
+action('restoreBackup', async ({ name, when }) => {
+  const ok = await ask({
+    title: '¿Restaurar este respaldo?',
+    msg: `Tus datos volverán a como estaban el ${when}. Antes se guarda un respaldo de lo actual, por si necesitas regresar.`,
+    ok: 'Restaurar',
+    danger: true,
+  });
+  if (!ok) return;
+  const r = await fetch(`/api/backups/${encodeURIComponent(name)}/restore`, { method: 'POST' });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) return toast(data.error || 'No se pudo restaurar', 'alert');
+  // Se recarga para tomar los datos restaurados del servidor (los demás dispositivos los reciben solos)
+  toast('Respaldo restaurado. Recargando…', 'check');
+  setTimeout(() => location.reload(), 800);
+});
+
+// La lista se actualiza cada vez que se abre Ajustes
+document.addEventListener('tabchange', e => e.detail === 'ajustes' && loadBackups());
 
 // ===== Exportar / importar =====
 export function download(name, content, type) {
