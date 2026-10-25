@@ -1,6 +1,6 @@
 import '../css/styles.css';
 import { KEY, $, today } from './core.js';
-import { toast, opts, setTab, applyTheme } from './ui.js';
+import { toast, setTab, applyTheme } from './ui.js';
 import { render } from './render.js';
 import { drawChart } from './resumen.js';
 import { drawLine } from './analisis.js';

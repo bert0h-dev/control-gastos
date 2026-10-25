@@ -218,8 +218,10 @@
         <div class="list" id="recList"></div>
       </div>
       <div class="card">
-        <div class="card-hd"><h2>Nuevo recurrente</h2></div>
+        <div class="card-hd"><h2 id="recFormTitle">Nuevo recurrente</h2></div>
         <form id="recForm" style="display:grid;gap:12px">
+          <input type="hidden" id="rId">
+          <p class="hint" id="recEditHint" style="margin:0" hidden>Los cambios aplican a los próximos meses. Los movimientos ya registrados no se modifican.</p>
           <div class="seg">
             <input type="radio" name="rtype" id="rG" value="gasto" checked><label for="rG" class="g">Gasto</label>
             <input type="radio" name="rtype" id="rI" value="ingreso"><label for="rI" class="i">Ingreso</label>
@@ -234,7 +236,10 @@
             <label class="f">Cuenta<select id="rAccount"></select></label>
           </div>
           <label class="f">A partir de<input id="rStart" type="month" required></label>
-          <button class="btn" type="submit"><svg class="ic"><use href="#i-repeat"/></svg>Programar</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn" type="submit" id="rSave" style="flex:1"><svg class="ic"><use href="#i-repeat"/></svg><span>Programar</span></button>
+            <button class="btn sec" type="button" id="rCancel" hidden>Cancelar</button>
+          </div>
         </form>
       </div>
     </div>
@@ -243,12 +248,16 @@
   <!-- METAS -->
   <section class="panel" data-panel="metas" hidden>
     <div class="card">
-      <div class="card-hd"><h2>Nueva meta de ahorro</h2></div>
+      <div class="card-hd"><h2 id="goalFormTitle">Nueva meta de ahorro</h2></div>
       <form id="goalForm" class="grid-form">
+        <input type="hidden" id="gId">
         <label class="f">Meta<input id="gName" placeholder="Vacaciones, fondo de emergencia…" required maxlength="40"></label>
         <label class="f">Objetivo<input id="gTarget" type="number" step="0.01" min="1" required></label>
         <label class="f">Fecha límite<input id="gDeadline" type="month" required></label>
-        <button class="btn" type="submit"><svg class="ic"><use href="#i-target"/></svg>Crear meta</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn" type="submit" id="gSave" style="flex:1"><svg class="ic"><use href="#i-target"/></svg><span>Crear meta</span></button>
+          <button class="btn sec" type="button" id="gCancel" hidden>Cancelar</button>
+        </div>
       </form>
     </div>
     <div class="goals" id="goalList"></div>

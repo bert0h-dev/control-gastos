@@ -2,7 +2,7 @@ import { state, $, fmt, esc, ic, today, monthName, month, save, catColor, setMon
 import { filterTx, groupByDay, netOf, round2 } from './logic/calculos.js';
 import { addMonths } from './logic/fechas.js';
 import { parseTags } from './logic/analisis.js';
-import { toast, ask, fillCatSelect, fillAccSelect } from './ui.js';
+import { toast, fillCatSelect, fillAccSelect, undoable } from './ui.js';
 import { render } from './render.js';
 
 // ===== Movimientos: lista, filtros y modal =====
@@ -120,10 +120,9 @@ $('txForm').addEventListener('submit', e => {
   save(); closeTx(); render();
   toast(old ? 'Movimiento actualizado' : `${{ gasto: 'Gasto', ingreso: 'Ingreso', transferencia: 'Transferencia' }[type]} de ${fmt(tx.amount)} registrado`);
 });
-window.delTx = async id => {
+window.delTx = id => {
   const x = state.tx.find(t => t.id === id);
-  if (!await ask({title:'¿Eliminar movimiento?', msg:`${x.desc} · ${fmt(x.amount)}`, ok:'Eliminar', danger:true})) return;
-  state.tx = state.tx.filter(t => t.id !== id); save(); render(); toast('Movimiento eliminado', 'trash');
+  undoable(`"${x.desc}" eliminado`, 'trash', () => { state.tx = state.tx.filter(t => t.id !== id); });
 };
 
 // ===== Periodo y filtros =====

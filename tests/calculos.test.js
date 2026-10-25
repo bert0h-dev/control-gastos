@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sum, monthSummary, expensesByCategory, dailyAverage, compareMonths, budgetStatus, goalPlan, filterTx, groupByDay, netOf, niceScale } from '../src/js/logic/calculos.js';
+import { sum, monthSummary, expensesByCategory, dailyAverage, compareMonths, budgetStatus, goalPlan, filterTx, groupByDay, netOf, niceScale, renameCategory } from '../src/js/logic/calculos.js';
 
 let id = 0;
 const t = (date, type, amount, cat = 'Otros', desc = 'x', note = '') => ({ id: ++id, date, type, amount, cat, desc, note });
@@ -101,6 +101,23 @@ describe('movimientos', () => {
       ['2026-10-08', -500, 1], ['2026-10-05', -4500, 2], ['2026-10-01', 20000, 1],
     ]);
     expect(netOf(filterTx(tx, { month: '2026-10' }))).toBe(15000);
+  });
+});
+
+describe('renombrar categoría', () => {
+  it('actualiza movimientos, recurrentes, presupuesto y subcategorías', () => {
+    const s = {
+      cats: { gasto: ['Comida', 'Otros'], ingreso: ['Comida'] },
+      tx: [{ type: 'gasto', cat: 'Comida' }, { type: 'gasto', cat: 'Otros' }, { type: 'ingreso', cat: 'Comida' }],
+      recurring: [{ type: 'gasto', cat: 'Comida' }],
+      budgets: { Comida: 3000 }, subcats: { Comida: ['Súper'] },
+    };
+    renameCategory(s, 'gasto', 'Comida', 'Alimentación');
+    expect(s.cats.gasto).toEqual(['Alimentación', 'Otros']);
+    expect(s.tx.map(x => x.cat)).toEqual(['Alimentación', 'Otros', 'Comida']); // el ingreso con el mismo nombre no cambia
+    expect(s.recurring[0].cat).toBe('Alimentación');
+    expect(s.budgets).toEqual({ Alimentación: 3000 });
+    expect(s.subcats).toEqual({ Alimentación: ['Súper'] });
   });
 });
 

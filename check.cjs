@@ -68,6 +68,23 @@ function sample() {
       await page.waitForTimeout(200);
       await page.screenshot({ path: path.join(out, `${name}-cuentas-tras-pago.png`), fullPage: true });
     } catch (e) { errors.push(`[${name}] no se pudo registrar la transferencia: ${e.message.split('\n')[0]}`); }
+    // Flujo: eliminar un movimiento y deshacerlo
+    try {
+      await page.click('.tab[data-tab="movimientos"]');
+      const before = await page.locator('.tx').count();
+      await page.locator('.tx .iconbtn.del').first().click();
+      if (await page.locator('.tx').count() !== before - 1) errors.push(`[${name}] eliminar no quitó el movimiento`);
+      await page.click('.toast-btn', { timeout: 3000 });
+      if (await page.locator('.tx').count() !== before) errors.push(`[${name}] deshacer no restauró el movimiento`);
+    } catch (e) { errors.push(`[${name}] falló eliminar/deshacer: ${e.message.split('\n')[0]}`); }
+    // Flujo: editar el monto de un recurrente
+    try {
+      await page.click('.tab[data-tab="recurrentes"]');
+      await page.locator('#recList [aria-label="Editar"]').first().click();
+      await page.fill('#rAmount', '349', { timeout: 3000 });
+      await page.click('#rSave');
+      if (!(await page.textContent('#recList')).includes('349.00')) errors.push(`[${name}] el recurrente no se actualizó`);
+    } catch (e) { errors.push(`[${name}] falló editar recurrente: ${e.message.split('\n')[0]}`); }
     // Flujo: registrar un gasto desde el modal
     try {
       await page.click('#btnNew');

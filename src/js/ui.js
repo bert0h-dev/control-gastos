@@ -1,21 +1,39 @@
-import { KEY, state, $, esc, ic, save } from './core.js';
+import { KEY, state, $, esc, ic, save, setState } from './core.js';
+import { render } from './render.js';
 import { drawChart } from './resumen.js';
 import { drawLine } from './analisis.js';
 
 // ===== UI helpers =====
-export function toast(msg, icon = 'check'){
-  const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = ic(icon) + esc(msg);
-  $('toasts').append(t); setTimeout(() => t.remove(), 2800);
+// 'action' agrega un botón al aviso, p. ej. { label: 'Deshacer', fn }
+export function toast(msg, icon = 'check', action){
+  const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = ic(icon) + `<span>${esc(msg)}</span>`;
+  if (action) {
+    const b = document.createElement('button'); b.className = 'toast-btn'; b.textContent = action.label;
+    b.onclick = () => { t.remove(); action.fn(); };
+    t.append(b);
+  }
+  $('toasts').append(t); setTimeout(() => t.remove(), action ? 7000 : 2800);
+}
+
+// Ejecuta un cambio destructivo y ofrece deshacerlo restaurando una copia del estado previo
+export function undoable(msg, icon, change){
+  const snapshot = structuredClone(state);
+  change();
+  save(); render();
+  toast(msg, icon, { label: 'Deshacer', fn: () => { setState(snapshot); save(); render(); toast('Cambio deshecho', 'check'); } });
 }
 // Diálogo propio en lugar de confirm()/prompt()
-export function ask({title, msg = '', ok = 'Aceptar', danger = false, input = false}){
+// input: false (solo confirmar), true (pide un monto) o 'text' (pide texto; 'value' es el valor inicial)
+export function ask({title, msg = '', ok = 'Aceptar', danger = false, input = false, value = ''}){
   return new Promise(res => {
+    const inp = $('dlgInput'), text = input === 'text';
     $('dlgTitle').textContent = title; $('dlgMsg').textContent = msg; $('dlgMsg').hidden = !msg;
     $('dlgOk').textContent = ok; $('dlgOk').className = 'btn' + (danger ? ' danger' : '');
-    $('dlgInput').hidden = !input; $('dlgInput').required = input; $('dlgInput').value = '';
-    $('dlg').hidden = false; (input ? $('dlgInput') : $('dlgOk')).focus();
+    inp.hidden = !input; inp.required = !!input; inp.type = text ? 'text' : 'number';
+    inp.className = text ? '' : 'amount-in'; inp.maxLength = text ? 30 : -1; inp.value = value;
+    $('dlg').hidden = false; (input ? inp : $('dlgOk')).focus();
     const done = v => { $('dlg').hidden = true; $('dlgForm').onsubmit = $('dlgCancel').onclick = null; res(v); };
-    $('dlgForm').onsubmit = e => { e.preventDefault(); done(input ? parseFloat($('dlgInput').value) : true); };
+    $('dlgForm').onsubmit = e => { e.preventDefault(); done(text ? inp.value.trim() : input ? parseFloat(inp.value) : true); };
     $('dlgCancel').onclick = () => done(input ? null : false);
   });
 }

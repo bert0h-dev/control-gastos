@@ -1,7 +1,7 @@
 import { state, $, fmt, esc, ic, today, save, newId } from './core.js';
 import { KINDS, balanceOf, cardStatement, netWorth } from './logic/cuentas.js';
 import { round2 } from './logic/calculos.js';
-import { toast, ask, closable } from './ui.js';
+import { toast, ask, closable, undoable } from './ui.js';
 import { render } from './render.js';
 import { renderTx } from './movimientos.js';
 
@@ -120,13 +120,13 @@ window.delAcc = async id => {
   const a = state.accounts.find(x => x.id === id);
   if (state.accounts.length <= 1) return toast('Debe quedar al menos una cuenta', 'alert');
   const n = state.tx.filter(x => x.account === id || x.to === id).length;
-  if (n) {
-    const others = state.accounts.filter(x => x.id !== id);
-    if (!await ask({ title: `¿Eliminar "${a.name}"?`, msg: `Tiene ${n} movimientos. Se moverán a "${others[0].name}" y las transferencias hacia o desde ella se eliminarán.`, ok: 'Eliminar', danger: true })) return;
+  const other = state.accounts.find(x => x.id !== id);
+  // Con movimientos se confirma antes, porque se mueven a otra cuenta
+  if (n && !await ask({ title: `¿Eliminar "${a.name}"?`, msg: `Tiene ${n} movimientos. Se moverán a "${other.name}" y las transferencias hacia o desde ella se eliminarán.`, ok: 'Eliminar', danger: true })) return;
+  undoable(`Cuenta "${a.name}" eliminada`, 'trash', () => {
     state.tx = state.tx.filter(x => !(x.type === 'transferencia' && (x.account === id || x.to === id)))
-      .map(x => x.account === id ? { ...x, account: others[0].id } : x);
-    state.recurring.forEach(r => { if (r.account === id) r.account = others[0].id; });
-  } else if (!await ask({ title: `¿Eliminar "${a.name}"?`, ok: 'Eliminar', danger: true })) return;
-  state.accounts = state.accounts.filter(x => x.id !== id);
-  save(); render(); toast('Cuenta eliminada', 'trash');
+      .map(x => x.account === id ? { ...x, account: other.id } : x);
+    state.recurring.forEach(r => { if (r.account === id) r.account = other.id; });
+    state.accounts = state.accounts.filter(x => x.id !== id);
+  });
 };

@@ -127,6 +127,7 @@ Cálculos generales sobre la lista de movimientos. Depende de `fechas.js`.
 | `groupByDay(lista)` | Agrupa por día con el neto de cada día |
 | `chartSeries(tx, m, n)` | Ingresos y gastos de los últimos `n` meses para la gráfica |
 | `niceScale(max)` | Escala legible para ejes (pasos de 1, 2, 2.5 o 5 × 10ⁿ) |
+| `renameCategory(state, tipo, de, a)` | Renombra una categoría en movimientos, recurrentes, presupuesto y subcategorías. Es la única función de `logic/` que modifica lo que recibe |
 
 > Las transferencias (`type: 'transferencia'`) nunca cuentan como ingreso ni como gasto. `sumOf` las excluye porque filtra por tipo, y `netOf` les da valor 0.
 
@@ -218,8 +219,9 @@ Hace, en orden:
 
 | Exporta | Para qué |
 |---|---|
-| `toast(msg, icono)` | Aviso temporal abajo de la pantalla |
-| `ask({title, msg, ok, danger, input})` | Diálogo propio de confirmación o de captura de un monto. Devuelve una promesa |
+| `toast(msg, icono, acción?)` | Aviso temporal abajo de la pantalla. Con `acción` (`{ label, fn }`) muestra un botón |
+| `undoable(msg, icono, cambio)` | Guarda una copia del estado, aplica `cambio`, guarda, redibuja y muestra un aviso con **Deshacer**. Úsalo para toda eliminación en lugar de pedir confirmación |
+| `ask({title, msg, ok, danger, input, value})` | Diálogo propio. `input: true` pide un monto, `input: 'text'` pide texto. Devuelve una promesa |
 | `opts`, `fillCatSelect`, `fillAccSelect` | Llenar `<select>` de categorías y cuentas conservando la opción elegida |
 | `closable(modal)` | Cierra un modal al hacer clic fuera o en `[data-close]` |
 | `setTab(t)` | Cambia de pestaña, actualiza el `#hash` y redibuja la gráfica de esa pestaña |
@@ -274,10 +276,12 @@ El HTML que generan las vistas usa `onclick="..."`, que solo ve funciones global
 |---|---|
 | `openTx(id?, preset?)`, `delTx`, `filterTag` | `movimientos.js` |
 | `openAcc`, `delAcc`, `payCard`, `showAccount` | `cuentas.js` |
-| `delBudget` | `presupuestos.js` |
-| `toggleRec`, `delRec` | `recurrentes.js` |
-| `moveGoal`, `delGoal` | `metas.js` |
-| `delCat` | `categorias.js` |
+| `editBudget`, `delBudget` | `presupuestos.js` |
+| `editRec`, `toggleRec`, `delRec` | `recurrentes.js` |
+| `editGoal`, `moveGoal`, `delGoal` | `metas.js` |
+| `renameCat`, `delCat` | `categorias.js` |
+
+Los formularios de recurrentes y metas sirven para crear y para editar: `editRec` y `editGoal` cargan los valores en el formulario, cambian el título y muestran **Cancelar**.
 
 `openTx(null, { type: 'transferencia', to: 'tarjeta', amount: 500 })` abre la ventana ya llena; así funciona el botón **Pagar** de las tarjetas.
 

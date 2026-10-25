@@ -90,6 +90,18 @@ export const chartSeries = (tx, m, n = 6) => lastMonths(m, n).map(mm => {
   const s = monthSummary(tx, mm); return { m: mm, inc: s.inc, exp: s.exp };
 });
 
+// Cambia el nombre de una categoría en todos los lugares donde se usa (modifica 'state')
+export function renameCategory(state, type, from, to){
+  const i = state.cats[type].indexOf(from);
+  if (i < 0) return state;
+  state.cats[type][i] = to;
+  state.tx.forEach(x => { if (x.cat === from && x.type === type) x.cat = to; });
+  state.recurring.forEach(r => { if (r.cat === from && r.type === type) r.cat = to; });
+  if (from in state.budgets) { state.budgets[to] = state.budgets[from]; delete state.budgets[from]; }
+  if (state.subcats?.[from]) { state.subcats[to] = state.subcats[from]; delete state.subcats[from]; }
+  return state;
+}
+
 // Escala "bonita" para el eje: 4 divisiones de 1, 2, 2.5 o 5 x 10^n
 export function niceScale(maxValue, ticks = 4){
   const raw = Math.max(1, maxValue) / ticks, mag = 10 ** Math.floor(Math.log10(raw));
