@@ -230,12 +230,13 @@ Generación de movimientos recurrentes. Depende de `fechas.js`.
 
 Importar y exportar. Depende de `calculos.js` y `cuentas.js`.
 
-| Función                            | Qué hace                                                                                                          |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `toCsv(tx, nombreCuenta)`          | Genera el CSV (con BOM para que Excel respete los acentos)                                                        |
-| `parseCsv(texto, newId, idCuenta)` | Lee el CSV actual de 10 columnas y el formato anterior de 7. Descarta y cuenta las filas inválidas                |
-| `splitCsvLine(línea)`              | Divide una línea respetando comillas y comas internas                                                             |
-| `sanitizeBackup(json, defaults)`   | Valida un respaldo JSON campo por campo. Descarta lo inválido, recorta textos largos y nunca confía en el archivo |
+| Función                                                                                                                                         | Qué hace                                                                                                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `toCsv(tx, nombreCuenta)`                                                                                                                       | Genera el CSV (con BOM para que Excel respete los acentos)                                                                              |
+| `parseCsv(texto, newId, idCuenta)`                                                                                                              | Lee el CSV actual de 10 columnas y el formato anterior de 7. Descarta y cuenta las filas inválidas                                      |
+| `splitCsvLine(línea)`                                                                                                                           | Divide una línea respetando comillas y comas internas                                                                                   |
+| `sanitizeBackup(json, defaults)`                                                                                                                | Valida un respaldo JSON completo usando los validadores de la fila siguiente                                                            |
+| `sanitizeTx`, `sanitizeRecurring`, `sanitizeGoal`, `sanitizeAccounts`, `sanitizeCats`, `sanitizeSubcats`, `sanitizeBudgets`, `sanitizeSettings` | Reconstruyen cada dato campo por campo y descartan lo inválido. Los usan la importación y el servidor, que valida cada cambio que llega |
 
 ---
 
